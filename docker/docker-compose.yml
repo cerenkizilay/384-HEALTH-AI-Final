@@ -1,0 +1,15 @@
+services:
+  front384:
+    container_name: front384
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ..:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    restart: unless-stopped

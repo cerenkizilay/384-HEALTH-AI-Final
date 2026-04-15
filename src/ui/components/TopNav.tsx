@@ -16,9 +16,9 @@ export function TopNav() {
         top: 0,
         zIndex: 10,
         width: '100%',
-        background: 'rgba(255,255,255,0.85)',
-        backdropFilter: 'blur(10px)',
-        borderBottom: '1px solid rgba(0,0,0,0.06)',
+        background: 'rgba(255,255,255,0.72)',
+        backdropFilter: 'blur(14px)',
+        borderBottom: '1px solid rgba(148,163,184,0.26)',
       }}
     >
       <div className="app-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -59,7 +59,7 @@ export function TopNav() {
                   ]
                 : []),
             ]}
-            style={{ minWidth: 320, background: 'transparent' }}
+            style={{ minWidth: 320, background: 'transparent', borderBottom: 0 }}
           />
         </Space>
 
