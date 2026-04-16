@@ -1,4 +1,19 @@
 services:
+  auth-api:
+    container_name: front384-auth-api
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+    restart: unless-stopped
+
   front384:
     container_name: front384
     build:
@@ -11,5 +26,6 @@ services:
       - /app/node_modules
     environment:
       - CHOKIDAR_USEPOLLING=true
+      - VITE_AUTH_API_URL=http://localhost:4000
     command: npm run dev -- --host 0.0.0.0 --port 5173
     restart: unless-stopped

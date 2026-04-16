@@ -43,7 +43,7 @@ export function register(params: { name: string; email: string; role: Exclude<Ro
   const name = params.name.trim()
   const email = params.email.trim().toLowerCase()
   if (!name) throw new Error('Name is required.')
-  if (!isInstitutionalEduEmail(email)) throw new Error('Registration is restricted to institutional .edu emails.')
+  if (!isInstitutionalEduEmail(email)) throw new Error('Please enter a valid email address.')
   const existing = db.get().users.find((x) => x.email === email)
   if (existing) throw new Error('An account with this email already exists.')
 
@@ -72,5 +72,32 @@ export function verifyEmail(emailRaw: string) {
     d.users[idx] = { ...d.users[idx], verified: true }
   })
   audit({ userId: u.id, role: u.role, actionType: 'verify_email', result: 'success' })
+}
+
+const AUTH_API_BASE = (import.meta.env.VITE_AUTH_API_URL as string | undefined)?.trim() || 'http://localhost:4000'
+
+export async function requestEmailVerificationCode(emailRaw: string) {
+  const email = emailRaw.trim().toLowerCase()
+  const res = await fetch(`${AUTH_API_BASE}/auth/send-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  const data = (await res.json().catch(() => ({}))) as { message?: string }
+  if (!res.ok) throw new Error(data.message || 'Failed to send verification code.')
+}
+
+export async function confirmEmailVerificationCode(emailRaw: string, codeRaw: string) {
+  const email = emailRaw.trim().toLowerCase()
+  const code = codeRaw.trim()
+  const res = await fetch(`${AUTH_API_BASE}/auth/verify-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code }),
+  })
+  const data = (await res.json().catch(() => ({}))) as { message?: string }
+  if (!res.ok) throw new Error(data.message || 'Verification failed.')
+
+  verifyEmail(email)
 }
 

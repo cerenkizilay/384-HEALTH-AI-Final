@@ -20,7 +20,7 @@ export function LoginPage() {
             <div className="-mt-11 h-14 w-14 rounded-2xl border border-white/70 bg-gradient-to-br from-cyan-500 via-teal-500 to-emerald-500 shadow-lg shadow-cyan-500/30" />
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Log in</h1>
-              <p className="text-sm text-slate-600">Institutional access only (.edu)</p>
+              <p className="text-sm text-slate-600">Use your registered email address</p>
             </div>
           </div>
 
@@ -44,13 +44,7 @@ export function LoginPage() {
               }
             }}
           >
-            <TextInput
-              label="Institutional email"
-              value={email}
-              onChange={setEmail}
-              type="email"
-              placeholder="name@university.edu"
-            />
+            <TextInput label="Email" value={email} onChange={setEmail} type="email" placeholder="name@example.com" />
 
             <div className="flex items-center justify-between gap-3">
               <Button type="submit" disabled={!email}>

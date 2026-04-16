@@ -35,7 +35,7 @@ export function LandingPage() {
                 </>
               ) : (
                 <>
-                  <Button onClick={() => nav('/register')}>Register with .edu</Button>
+                  <Button onClick={() => nav('/register')}>Register</Button>
                   <Button variant="secondary" onClick={() => nav('/login')}>
                     Log in
                   </Button>

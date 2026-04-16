@@ -9,10 +9,10 @@ export function uid(prefix: string) {
 export function isInstitutionalEduEmail(emailRaw: string) {
   const email = emailRaw.trim().toLowerCase()
   const at = email.lastIndexOf('@')
-  if (at <= 0) return false
+  // Simple validation: local-part and domain must exist.
+  if (at <= 0 || at >= email.length - 1) return false
   const domain = email.slice(at + 1)
-  // Strict-ish: allow .edu (US) and common variants like .edu.tr
-  return domain.endsWith('.edu') || domain.includes('.edu.')
+  return domain.includes('.')
 }
 
 export function dateOnlyIso(d: Date) {

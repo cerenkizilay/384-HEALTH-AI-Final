@@ -16,8 +16,7 @@ export function RegisterPage() {
       <Card className="p-6">
         <h1 className="text-xl font-semibold tracking-tight">Register</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Registration is restricted to <span className="font-medium text-slate-900">institutional .edu</span> emails. Email verification
-          is required.
+          Use a valid email address containing <span className="font-medium text-slate-900">@</span>. Email verification is required.
         </p>
 
         <form
@@ -34,7 +33,7 @@ export function RegisterPage() {
           }}
         >
           <TextInput label="Full name" value={name} onChange={setName} placeholder="Your name" />
-          <TextInput label="Institutional email" value={email} onChange={setEmail} type="email" placeholder="name@university.edu" />
+          <TextInput label="Email" value={email} onChange={setEmail} type="email" placeholder="name@example.com" />
           <Select
             label="Role"
             value={role}
