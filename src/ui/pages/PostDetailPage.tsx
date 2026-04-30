@@ -7,14 +7,14 @@ import { changePostStatus } from '../../lib/posts'
 import { createMeetingRequest, updateMeetingRequest } from '../../lib/meetings'
 import { audit } from '../../lib/audit'
 import { nowIso, uid } from '../../lib/utils'
-import { Card, Button, Pill, TextInput } from '../components/Ui'
+import { Alert, Avatar, Button, Card, Pill, SectionCard, Textarea, TextInput } from '../components/Ui'
 
-function statusTone(s: PostStatus): 'slate' | 'green' | 'amber' | 'rose' {
-  if (s === 'active') return 'green'
-  if (s === 'meeting_scheduled') return 'amber'
-  if (s === 'closed') return 'slate'
-  if (s === 'expired') return 'rose'
-  return 'slate'
+function statusConfig(s: PostStatus): { label: string; tone: 'slate' | 'green' | 'amber' | 'rose' | 'blue' | 'teal' | 'violet'; dot: boolean } {
+  if (s === 'active') return { label: 'Active', tone: 'green', dot: true }
+  if (s === 'meeting_scheduled') return { label: 'Meeting Scheduled', tone: 'amber', dot: true }
+  if (s === 'closed') return { label: 'Partner Found', tone: 'slate', dot: false }
+  if (s === 'expired') return { label: 'Expired', tone: 'rose', dot: false }
+  return { label: 'Draft', tone: 'slate', dot: false }
 }
 
 export function PostDetailPage() {
@@ -39,42 +39,65 @@ export function PostDetailPage() {
 
   if (!post || !owner) {
     return (
-      <Card>
-        <div className="text-sm text-slate-600">Post not found.</div>
+      <Card className="p-8 text-center">
+        <div className="text-sm text-slate-500">Post not found.</div>
+        <Link to="/posts" className="mt-4 inline-block text-sm text-teal-600 hover:underline">← Back to announcements</Link>
       </Card>
     )
   }
 
   const isOwner = u.role === 'admin' || post.ownerUserId === u.id
   const canMessage = !isOwner && post.status !== 'expired' && post.status !== 'closed'
-
   const myMeetings = meetingsForPost.filter((m) => m.fromUserId === u.id || m.toUserId === u.id)
+  const allMeetings = isOwner ? meetingsForPost : myMeetings
+  const sc = statusConfig(post.status)
+
+  const stageLabel: Record<string, string> = {
+    idea: 'Idea',
+    concept_validation: 'Concept validation',
+    prototype_developed: 'Prototype developed',
+    pilot_testing: 'Pilot testing',
+    pre_deployment: 'Pre-deployment',
+  }
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-2xl font-semibold tracking-tight">{post.title}</h1>
-            <Pill tone={statusTone(post.status)}>{post.status.replaceAll('_', ' ')}</Pill>
-            <Pill>{post.expertiseRequired === 'medical' ? 'Needs medical' : 'Needs engineering'}</Pill>
+    <div className="grid gap-6">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm text-slate-500">
+        <Link to="/posts" className="hover:text-teal-600 transition-colors">Announcements</Link>
+        <span>/</span>
+        <span className="max-w-xs truncate text-slate-700 font-medium">{post.title}</span>
+      </div>
+
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{post.title}</h1>
+            <Pill tone={sc.tone} dot={sc.dot}>{sc.label}</Pill>
+            <Pill tone={post.expertiseRequired === 'medical' ? 'teal' : 'blue'}>
+              {post.expertiseRequired === 'medical' ? 'Needs medical' : 'Needs engineering'}
+            </Pill>
           </div>
-          <div className="mt-1 text-sm text-slate-600">
-            {post.workingDomain} • {post.city}, {post.country} • Expires {post.expiryDate}
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+            <span>{post.workingDomain}</span>
+            <span>·</span>
+            <span>{post.city}, {post.country}</span>
+            <span>·</span>
+            <span>Expires {post.expiryDate}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => nav('/posts')}>
-            Back
-          </Button>
-          {isOwner ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => nav('/posts')}>← Back</Button>
+          {isOwner && (
             <>
               <Link to={`/posts/${post.id}/edit`}>
-                <Button variant="secondary">Edit</Button>
+                <Button variant="secondary" size="sm">Edit</Button>
               </Link>
               <Button
-                variant="primary"
+                variant={post.status === 'closed' ? 'ghost' : 'primary'}
+                size="sm"
                 disabled={post.status === 'closed'}
                 onClick={() => {
                   try {
@@ -85,138 +108,240 @@ export function PostDetailPage() {
                   }
                 }}
               >
-                Mark Partner Found
+                {post.status === 'closed' ? '✓ Partner Found' : 'Mark Partner Found'}
               </Button>
             </>
-          ) : null}
+          )}
         </div>
       </div>
 
-      {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null}
+      {error && <Alert tone="error">{error}</Alert>}
 
-      <Card className="p-5">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <div className="text-xs text-slate-500">Posted by</div>
-            <div className="text-sm font-medium">{owner.name}</div>
-            <div className="mt-2 text-xs text-slate-500">Confidentiality</div>
-            <div className="text-sm text-slate-700">
-              {post.confidentialityLevel === 'meeting_only' ? 'Details discussed in meeting only' : 'Public short pitch'}
+      {/* Main content grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Left: post details */}
+        <div className="grid gap-4 lg:col-span-2">
+          <SectionCard title="Announcement details">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Working domain" value={post.workingDomain} />
+              <Field label="Project stage" value={stageLabel[post.projectStage] ?? post.projectStage} />
+              <Field label="Collaboration type" value={post.collaborationType.replaceAll('_', ' ')} />
+              <Field label="Commitment required" value={post.commitmentLevel} />
+              <Field
+                label="Confidentiality"
+                value={post.confidentialityLevel === 'meeting_only' ? 'Details discussed in meeting only' : 'Public short pitch'}
+              />
+              <Field label="Location" value={`${post.city}, ${post.country}`} />
             </div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-500">Stage</div>
-            <div className="text-sm text-slate-700">{post.projectStage.replaceAll('_', ' ')}</div>
-            <div className="mt-2 text-xs text-slate-500">Collaboration type</div>
-            <div className="text-sm text-slate-700">{post.collaborationType.replaceAll('_', ' ')}</div>
-          </div>
-        </div>
 
-        <div className="mt-4">
-          <div className="text-xs text-slate-500">Short explanation</div>
-          <div className="mt-1 text-sm text-slate-800">{post.shortExplanation}</div>
-        </div>
-        <div className="mt-3">
-          <div className="text-xs text-slate-500">Desired expertise</div>
-          <div className="mt-1 text-sm text-slate-800">{post.desiredExpertise}</div>
-        </div>
-        <div className="mt-3">
-          <div className="text-xs text-slate-500">Commitment</div>
-          <div className="mt-1 text-sm text-slate-800">{post.commitmentLevel}</div>
-        </div>
-        {post.highLevelIdea ? (
-          <div className="mt-3">
-            <div className="text-xs text-slate-500">High-level idea</div>
-            <div className="mt-1 text-sm text-slate-800">{post.highLevelIdea}</div>
-          </div>
-        ) : null}
-      </Card>
+            <div className="mt-5 border-t border-slate-100 pt-5">
+              <div className="text-xs font-medium uppercase tracking-wider text-slate-400">Short explanation</div>
+              <p className="mt-2 text-sm leading-relaxed text-slate-700">{post.shortExplanation}</p>
+            </div>
 
-      {canMessage ? (
-        <Card className="p-5">
-          <div className="text-sm font-semibold">Express interest</div>
-          <p className="mt-1 text-sm text-slate-600">
-            Send a short message and propose meeting time slots. Meetings happen externally (Zoom/Teams). No recordings stored.
-          </p>
+            <div className="mt-4">
+              <div className="text-xs font-medium uppercase tracking-wider text-slate-400">Desired expertise</div>
+              <p className="mt-2 text-sm leading-relaxed text-slate-700">{post.desiredExpertise}</p>
+            </div>
 
-          <form
-            className="mt-4 grid gap-3"
-            onSubmit={(e) => {
-              e.preventDefault()
-              setError(null)
-              try {
-                // Interest message (lightweight)
-                if (interestMsg.trim()) {
-                  db.update((d) => {
-                    d.interests.unshift({
-                      id: uid('int'),
+            {post.highLevelIdea && (
+              <div className="mt-4">
+                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">High-level idea</div>
+                <p className="mt-2 text-sm leading-relaxed text-slate-700">{post.highLevelIdea}</p>
+                <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-400">
+                  <svg viewBox="0 0 14 14" fill="none" className="h-3 w-3" aria-hidden="true">
+                    <rect x="2" y="4" width="10" height="7" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+                    <path d="M5 4V3a2 2 0 014 0v1" stroke="currentColor" strokeWidth="1.2"/>
+                  </svg>
+                  Confidential details will only be discussed in the meeting
+                </div>
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Status lifecycle */}
+          {post.lifecycle.length > 1 && (
+            <SectionCard title="Lifecycle">
+              <div className="grid gap-2">
+                {post.lifecycle.map((e, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm">
+                    <div className="h-2 w-2 rounded-full bg-teal-500 shrink-0" />
+                    <span className="text-slate-500 tabular-nums">{e.at.slice(0, 10)}</span>
+                    <span className="text-slate-700 capitalize font-medium">{e.to.replaceAll('_', ' ')}</span>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {/* Meeting request form */}
+          {canMessage && (
+            <SectionCard title="Express interest" description="Send a short message and propose meeting time slots.">
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                <strong>Important:</strong> Meetings happen externally via Zoom or Teams. No recordings are stored on this platform.
+              </div>
+
+              <form
+                className="grid gap-4"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  setError(null)
+                  try {
+                    if (interestMsg.trim()) {
+                      db.update((d) => {
+                        d.interests.unshift({
+                          id: uid('int'),
+                          postId: post.id,
+                          fromUserId: u.id,
+                          toUserId: post.ownerUserId,
+                          message: interestMsg.trim(),
+                          createdAt: nowIso(),
+                        })
+                      })
+                      audit({ userId: u.id, role: u.role, actionType: 'security_event', result: 'success', details: 'interest_message_sent' })
+                    }
+
+                    const slots = [slot1, slot2, slot3].map((s) => s.trim()).filter(Boolean)
+                    createMeetingRequest({
                       postId: post.id,
                       fromUserId: u.id,
                       toUserId: post.ownerUserId,
-                      message: interestMsg.trim(),
-                      createdAt: nowIso(),
+                      ndaAccepted,
+                      proposedSlots: slots,
                     })
-                  })
-                  audit({ userId: u.id, role: u.role, actionType: 'security_event', result: 'success', details: 'interest_message_sent' })
-                }
+                    nav(0)
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Failed to send request.')
+                  }
+                }}
+              >
+                <Textarea
+                  label="Short message (optional)"
+                  value={interestMsg}
+                  onChange={setInterestMsg}
+                  placeholder="Hi, I'm interested. I can help with…"
+                  rows={2}
+                />
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <TextInput label="Proposed slot 1" value={slot1} onChange={setSlot1} placeholder="e.g., 2026-05-10 14:00" />
+                  <TextInput label="Proposed slot 2" value={slot2} onChange={setSlot2} placeholder="e.g., 2026-05-11 10:30" />
+                  <TextInput label="Proposed slot 3" value={slot3} onChange={setSlot3} placeholder="e.g., 2026-05-12 16:00" />
+                </div>
 
-                const slots = [slot1, slot2, slot3].map((s) => s.trim()).filter(Boolean)
-                createMeetingRequest({
-                  postId: post.id,
-                  fromUserId: u.id,
-                  toUserId: post.ownerUserId,
-                  ndaAccepted,
-                  proposedSlots: slots,
-                })
-                // In real workflow, owner acknowledges and parties agree; we mark the post as "meeting_scheduled" only on acceptance.
-                nav(0)
-              } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to send request.')
-              }
-            }}
-          >
-            <TextInput label="Short message (optional)" value={interestMsg} onChange={setInterestMsg} placeholder="Hi, I’m interested. I can help with…" />
-            <div className="grid gap-3 md:grid-cols-3">
-              <TextInput label="Proposed slot 1" value={slot1} onChange={setSlot1} placeholder="2026-04-20 14:00" />
-              <TextInput label="Proposed slot 2" value={slot2} onChange={setSlot2} placeholder="2026-04-21 10:30" />
-              <TextInput label="Proposed slot 3" value={slot3} onChange={setSlot3} placeholder="2026-04-22 16:00" />
-            </div>
-            <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white p-3">
-              <input className="mt-1" checked={ndaAccepted} onChange={(e) => setNdaAccepted(e.target.checked)} type="checkbox" />
-              <span className="text-sm text-slate-700">
-                I accept the NDA for first-contact meeting. I understand that confidential details should only be discussed in the meeting.
-              </span>
-            </label>
+                <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 cursor-pointer hover:border-teal-300 transition-colors">
+                  <input
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 accent-teal-600"
+                    checked={ndaAccepted}
+                    onChange={(e) => setNdaAccepted(e.target.checked)}
+                    type="checkbox"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-slate-800">I accept the NDA for first-contact meeting</div>
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      I understand that confidential details should only be discussed in the scheduled meeting. I will not share any disclosed information with third parties.
+                    </div>
+                  </div>
+                </label>
 
-            <div className="flex items-center justify-end">
-              <Button type="submit">Send meeting request</Button>
-            </div>
-          </form>
-        </Card>
-      ) : null}
+                {error && <Alert tone="error">{error}</Alert>}
 
-      <Card className="p-5">
-        <div className="text-sm font-semibold">Meeting requests</div>
-        <p className="mt-1 text-sm text-slate-600">
-          Propose slots, accept/decline, cancel. When accepted, the post becomes “Meeting Scheduled”.
-        </p>
+                <div className="flex justify-end">
+                  <Button type="submit">Send meeting request</Button>
+                </div>
+              </form>
+            </SectionCard>
+          )}
 
-        <div className="mt-4 grid gap-3">
-          {myMeetings.length === 0 ? (
-            <div className="text-sm text-slate-600">No meeting requests involving you yet.</div>
-          ) : (
-            myMeetings.map((m) => (
-              <MeetingCard
-                key={m.id}
-                meeting={m}
-                post={post}
-                isOwner={isOwner}
-                onChanged={() => nav(0)}
-              />
-            ))
+          {/* My meetings */}
+          {allMeetings.length > 0 && (
+            <SectionCard title="Meeting requests" description="Proposed time slots, accept/decline, or cancel.">
+              <div className="grid gap-3">
+                {allMeetings.map((m) => (
+                  <MeetingCard key={m.id} meeting={m} post={post} isOwner={isOwner} onChanged={() => nav(0)} />
+                ))}
+              </div>
+            </SectionCard>
           )}
         </div>
-      </Card>
+
+        {/* Right: sidebar */}
+        <div className="grid gap-4">
+          {/* Posted by */}
+          <Card className="p-5">
+            <div className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-3">Posted by</div>
+            <div className="flex items-center gap-3">
+              <Avatar name={owner.name} role={owner.role} size="md" />
+              <div>
+                <div className="font-semibold text-slate-900">{owner.name}</div>
+                <div className="text-xs text-slate-500 capitalize mt-0.5">{db.roleLabel(owner.role)}</div>
+                {owner.verified && (
+                  <div className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
+                    <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" aria-hidden="true">
+                      <circle cx="6" cy="6" r="5" fill="currentColor" opacity="0.15"/>
+                      <path d="M3.5 6l1.8 1.8L8.5 4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Verified
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          {/* Status info */}
+          <Card className="p-5">
+            <div className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-3">Status</div>
+            <div className="grid gap-2.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Current</span>
+                <Pill tone={sc.tone} dot={sc.dot}>{sc.label}</Pill>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Confidentiality</span>
+                <span className="text-xs font-medium text-slate-700">
+                  {post.confidentialityLevel === 'meeting_only' ? 'Meeting only' : 'Public pitch'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Auto-close</span>
+                <span className="text-xs font-medium text-slate-700">{post.autoClose ? 'Yes' : 'No'}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Expires</span>
+                <span className="text-xs font-medium text-slate-700">{post.expiryDate}</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Platform notice */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-xs font-semibold text-slate-600 mb-1">Platform policy</div>
+            <ul className="grid gap-1">
+              {[
+                'No file uploads allowed',
+                'No patient data stored',
+                'Meetings happen externally',
+                'NDA required for contact',
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true">
+                    <path d="M2 6l2.5 2.5L10 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Field(props: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{props.label}</div>
+      <div className="mt-1 text-sm text-slate-800 capitalize">{props.value}</div>
     </div>
   )
 }
@@ -228,39 +353,45 @@ function MeetingCard(props: { meeting: MeetingRequest; post: Post; isOwner: bool
   const other = db.get().users.find((x) => x.id === otherUserId)
 
   const canAcceptDecline = props.isOwner && m.toUserId === u.id && m.status === 'pending'
-  const canCancel = m.status === 'pending'
+  const canCancel = m.fromUserId === u.id && m.status === 'pending'
+
+  const statusCls =
+    m.status === 'accepted'
+      ? 'bg-emerald-50 text-emerald-700'
+      : m.status === 'declined'
+        ? 'bg-rose-50 text-rose-700'
+        : m.status === 'cancelled'
+          ? 'bg-slate-100 text-slate-500'
+          : 'bg-amber-50 text-amber-700'
 
   return (
-    <Card className="p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="text-sm font-medium">With: {other?.name ?? 'Unknown'}</div>
-          <div className="mt-1 text-xs text-slate-500">Status: {m.status}</div>
-          <div className="mt-2 text-xs text-slate-500">Proposed slots</div>
-          <ul className="mt-1 list-disc pl-5 text-sm text-slate-700">
-            {m.proposedSlots.map((s) => (
-              <li key={s}>
-                {s}
-                {m.selectedSlot === s ? <span className="ml-2 text-xs text-emerald-700">(selected)</span> : null}
-              </li>
-            ))}
-          </ul>
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <Avatar name={other?.name ?? '?'} role={other?.role} size="sm" />
+          <div>
+            <div className="text-sm font-semibold text-slate-800">{other?.name ?? 'Unknown'}</div>
+            <span className={`mt-0.5 inline-flex rounded-md px-2 py-0.5 text-xs font-medium capitalize ${statusCls}`}>
+              {m.status}
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {canAcceptDecline ? (
+          {canAcceptDecline && (
             <>
               <Button
+                size="sm"
                 onClick={() => {
-                  // owner selects first slot for demo simplicity
                   const selected = m.proposedSlots[0]
                   updateMeetingRequest({ meetingId: m.id, actingUserId: u.id, status: 'accepted', selectedSlot: selected })
                   changePostStatus(props.post.id, u.id, u.role, 'meeting_scheduled')
                   props.onChanged()
                 }}
               >
-                Accept (pick first slot)
+                Accept
               </Button>
               <Button
+                size="sm"
                 variant="secondary"
                 onClick={() => {
                   updateMeetingRequest({ meetingId: m.id, actingUserId: u.id, status: 'declined' })
@@ -270,9 +401,10 @@ function MeetingCard(props: { meeting: MeetingRequest; post: Post; isOwner: bool
                 Decline
               </Button>
             </>
-          ) : null}
-          {canCancel ? (
+          )}
+          {canCancel && (
             <Button
+              size="sm"
               variant="danger"
               onClick={() => {
                 updateMeetingRequest({ meetingId: m.id, actingUserId: u.id, status: 'cancelled' })
@@ -281,10 +413,26 @@ function MeetingCard(props: { meeting: MeetingRequest; post: Post; isOwner: bool
             >
               Cancel
             </Button>
-          ) : null}
+          )}
         </div>
       </div>
-    </Card>
+
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <div className="text-xs text-slate-500 mb-1.5">Proposed time slots</div>
+        <div className="flex flex-wrap gap-2">
+          {m.proposedSlots.map((s) => (
+            <span
+              key={s}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium tabular-nums ${
+                m.selectedSlot === s ? 'bg-teal-50 text-teal-700 ring-1 ring-teal-200' : 'bg-slate-50 text-slate-600'
+              }`}
+            >
+              {s}
+              {m.selectedSlot === s && ' ✓'}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
-

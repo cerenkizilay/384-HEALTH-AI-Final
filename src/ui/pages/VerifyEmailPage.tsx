@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { confirmEmailVerificationCode, requestEmailVerificationCode } from '../../lib/auth'
-import { Card, Button, TextInput } from '../components/Ui'
+import { Alert, Button, Card, TextInput } from '../components/Ui'
 
 export function VerifyEmailPage() {
   const nav = useNavigate()
@@ -22,7 +22,6 @@ export function VerifyEmailPage() {
   useEffect(() => {
     if (!canAutoSend || busy || done) return
     if (lastSentEmail === normalizedEmail && cooldown > 0) return
-
     const timeout = window.setTimeout(async () => {
       setError(null)
       try {
@@ -37,7 +36,6 @@ export function VerifyEmailPage() {
         setBusy(false)
       }
     }, 500)
-
     return () => window.clearTimeout(timeout)
   }, [canAutoSend, busy, cooldown, done, lastSentEmail, normalizedEmail])
 
@@ -53,8 +51,6 @@ export function VerifyEmailPage() {
     if (!sent || done || busy) return
     if (cooldown !== 0) return
     if (!canAutoSend || lastSentEmail !== normalizedEmail) return
-
-    // Auto-resend when 3-minute timer finishes so user never needs to click.
     void (async () => {
       setError(null)
       try {
@@ -73,49 +69,82 @@ export function VerifyEmailPage() {
   const ss = String(cooldown % 60).padStart(2, '0')
 
   return (
-    <div className="mx-auto max-w-xl">
-      <Card className="p-6">
-        <h1 className="text-xl font-semibold tracking-tight">Verify your email</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          We will send a one-time code to your email. Enter the code below to verify your account.
+    <div className="mx-auto max-w-lg py-4">
+      <div className="mb-8 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 shadow-lg shadow-teal-600/25">
+          <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7 text-white" aria-hidden="true">
+            <path d="M3 8l9 6 9-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            <rect x="2" y="6" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+          </svg>
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Verify your email</h1>
+        <p className="mt-2 text-sm text-slate-500">
+          We'll send a one-time code to your email address to verify your account.
         </p>
+      </div>
 
-        <form
-          className="mt-5 grid gap-4"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            setError(null)
-            try {
-              setBusy(true)
-              await confirmEmailVerificationCode(email, code)
-              setDone(true)
-            } catch (err) {
-              setError(err instanceof Error ? err.message : 'Verification failed.')
-            } finally {
-              setBusy(false)
-            }
-          }}
-        >
-          <TextInput label="Email" value={email} onChange={setEmail} type="email" placeholder="name@example.com" />
-          <TextInput label="Verification code" value={code} onChange={setCode} placeholder="6-digit code" />
-          {sent ? (
-            <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-800">
-              Verification code sent automatically. Check your inbox/spam. New code in {mm}:{ss}
+      <Card className="p-7">
+        {done ? (
+          <div className="text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
+              <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8 text-emerald-600" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/>
+                <path d="M8 12l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </div>
-          ) : null}
-          {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null}
-          {done ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">Verified. You can log in now.</div> : null}
-          <div className="flex items-center gap-2">
-            <Button type="submit" disabled={!email || !code || busy}>
-              {busy ? 'Please wait...' : 'Verify'}
-            </Button>
-            <Button variant="secondary" onClick={() => nav('/login')}>
+            <h2 className="text-lg font-semibold text-slate-900">Email verified!</h2>
+            <p className="mt-2 text-sm text-slate-500">Your account is now active. You can sign in.</p>
+            <Button className="mt-5 w-full" size="lg" onClick={() => nav('/login')}>
               Go to login
             </Button>
           </div>
-        </form>
+        ) : (
+          <form
+            className="grid gap-5"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              setError(null)
+              try {
+                setBusy(true)
+                await confirmEmailVerificationCode(email, code)
+                setDone(true)
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Verification failed.')
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            <TextInput label="Email address" value={email} onChange={setEmail} type="email" placeholder="name@institution.edu" />
+
+            {sent && (
+              <Alert tone="info">
+                Verification code sent to your inbox. Check your spam folder too.
+                <br />
+                <span className="font-semibold">New code in {mm}:{ss}</span>
+              </Alert>
+            )}
+
+            <TextInput
+              label="6-digit verification code"
+              value={code}
+              onChange={setCode}
+              placeholder="000000"
+            />
+
+            {error && <Alert tone="error">{error}</Alert>}
+
+            <div className="flex gap-3">
+              <Button type="submit" size="lg" className="flex-1" disabled={!email || !code || busy}>
+                {busy ? 'Verifying…' : 'Verify email'}
+              </Button>
+              <Button variant="secondary" onClick={() => nav('/login')}>
+                Back to login
+              </Button>
+            </div>
+          </form>
+        )}
       </Card>
     </div>
   )
 }
-

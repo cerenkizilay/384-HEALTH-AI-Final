@@ -7,6 +7,7 @@ import { VerifyEmailPage } from './ui/pages/VerifyEmailPage'
 import { PostsPage } from './ui/pages/PostsPage'
 import { PostDetailPage } from './ui/pages/PostDetailPage'
 import { PostEditorPage } from './ui/pages/PostEditorPage'
+import { MyPostsPage } from './ui/pages/MyPostsPage'
 import { AdminPage } from './ui/pages/AdminPage'
 import { RequireAuth } from './ui/RequireAuth'
 import { RequireRole } from './ui/RequireRole'
@@ -49,6 +50,15 @@ export default function App() {
           element={
             <RequireAuth>
               <PostEditorPage mode="edit" />
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="my-posts"
+          element={
+            <RequireAuth>
+              <MyPostsPage />
             </RequireAuth>
           }
         />
