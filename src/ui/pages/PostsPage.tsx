@@ -3,15 +3,7 @@ import { Link } from 'react-router-dom'
 import { getCurrentUser } from '../../lib/auth'
 import { db } from '../../lib/db'
 import type { Post, PostStatus, ProjectStage } from '../../lib/models'
-import { Card, Button, Pill, Select, TextInput } from '../components/Ui'
-
-function statusTone(s: PostStatus): 'slate' | 'green' | 'amber' | 'rose' {
-  if (s === 'active') return 'green'
-  if (s === 'meeting_scheduled') return 'amber'
-  if (s === 'closed') return 'slate'
-  if (s === 'expired') return 'rose'
-  return 'slate'
-}
+import { Avatar, Button, Card, EmptyState, Pill, Select, TextInput } from '../components/Ui'
 
 const stageLabels: Record<ProjectStage, string> = {
   idea: 'Idea',
@@ -19,6 +11,14 @@ const stageLabels: Record<ProjectStage, string> = {
   prototype_developed: 'Prototype developed',
   pilot_testing: 'Pilot testing',
   pre_deployment: 'Pre-deployment',
+}
+
+function statusConfig(s: PostStatus): { label: string; tone: 'slate' | 'green' | 'amber' | 'rose' | 'blue' | 'teal' | 'violet'; dot: boolean } {
+  if (s === 'active') return { label: 'Active', tone: 'green', dot: true }
+  if (s === 'meeting_scheduled') return { label: 'Meeting Scheduled', tone: 'amber', dot: true }
+  if (s === 'closed') return { label: 'Partner Found', tone: 'slate', dot: false }
+  if (s === 'expired') return { label: 'Expired', tone: 'rose', dot: false }
+  return { label: 'Draft', tone: 'slate', dot: false }
 }
 
 export function PostsPage() {
@@ -49,41 +49,57 @@ export function PostsPage() {
       .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
   }, [q, domain, city, country, stage, status, data.posts])
 
-  const myCity = u.role === 'admin' ? '' : u.email.split('@')[1] // meaningless, but keeps demo deterministic
   const cityMatches = useMemo(() => {
     if (!city) return new Set<string>()
     return new Set(posts.filter((p) => p.city.toLowerCase() === city.trim().toLowerCase()).map((p) => p.id))
   }, [posts, city])
 
+  const hasFilters = !!(q || domain || city || country || stage)
+
   return (
     <div className="grid gap-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Announcements</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Filter by domain, expertise need, location, stage, and status. City matches are highlighted.
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Announcements</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {posts.length} result{posts.length !== 1 ? 's' : ''} · Filter by domain, location, stage, or status
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => setFiltersOpen((x) => !x)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setFiltersOpen((x) => !x)}
+            icon={
+              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+                <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            }
+          >
             {filtersOpen ? 'Hide filters' : 'Show filters'}
           </Button>
           <Link to="/posts/new">
-            <Button>Create announcement</Button>
+            <Button size="sm">+ New announcement</Button>
           </Link>
         </div>
       </div>
 
-      {filtersOpen ? (
-        <Card className="p-4 md:p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="text-sm font-semibold text-slate-900">Filters</div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-              <Pill>Showing: {status || 'any'}</Pill>
-              {city ? <Pill tone="amber">City highlight on</Pill> : <Pill tone="slate">City highlight off</Pill>}
-            </div>
+      {/* Filters */}
+      {filtersOpen && (
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm font-semibold text-slate-800">Filters</span>
+            {hasFilters && (
+              <button
+                className="text-xs text-teal-600 hover:underline"
+                onClick={() => { setQ(''); setDomain(''); setCity(''); setCountry(''); setStage('') }}
+              >
+                Clear all
+              </button>
+            )}
           </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <TextInput label="Search" value={q} onChange={setQ} placeholder="Keyword…" />
             <TextInput label="Domain contains" value={domain} onChange={setDomain} placeholder="e.g., cardiology imaging" />
             <TextInput
@@ -91,7 +107,7 @@ export function PostsPage() {
               value={city}
               onChange={setCity}
               placeholder="e.g., Ankara"
-              hint={myCity ? `Tip: city highlighting is active when a city is entered.` : undefined}
+              hint="City matches are highlighted in the list."
             />
             <TextInput label="Country (exact)" value={country} onChange={setCountry} placeholder="e.g., Turkey" />
             <Select
@@ -99,7 +115,7 @@ export function PostsPage() {
               value={stage}
               onChange={(v) => setStage(v as ProjectStage | '')}
               options={[
-                { value: '', label: 'Any' },
+                { value: '', label: 'Any stage' },
                 ...Object.entries(stageLabels).map(([value, label]) => ({ value, label })),
               ]}
             />
@@ -108,7 +124,7 @@ export function PostsPage() {
               value={status}
               onChange={(v) => setStatus(v as PostStatus | '')}
               options={[
-                { value: '', label: 'Any' },
+                { value: '', label: 'Any status' },
                 { value: 'draft', label: 'Draft' },
                 { value: 'active', label: 'Active' },
                 { value: 'meeting_scheduled', label: 'Meeting Scheduled' },
@@ -117,65 +133,144 @@ export function PostsPage() {
               ]}
             />
           </div>
+          {city && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M8 5v3M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+              City highlighting active — posts in <strong className="mx-1">{city}</strong> are highlighted with a border.
+            </div>
+          )}
         </Card>
-      ) : null}
+      )}
 
+      {/* Results */}
       <div className="grid gap-3">
         {posts.length === 0 ? (
-          <Card>
-            <div className="text-sm text-slate-600">No posts match your filters.</div>
+          <Card className="p-8">
+            <EmptyState
+              icon={
+                <svg viewBox="0 0 48 48" fill="none" className="h-12 w-12" aria-hidden="true">
+                  <rect x="8" y="12" width="32" height="24" rx="4" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M14 20h20M14 26h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              }
+              title="No announcements match your filters"
+              description="Try broadening your search or clearing some filters."
+              action={
+                hasFilters ? (
+                  <Button variant="secondary" size="sm" onClick={() => { setQ(''); setDomain(''); setCity(''); setCountry(''); setStage('') }}>
+                    Clear filters
+                  </Button>
+                ) : (
+                  <Link to="/posts/new">
+                    <Button size="sm">Create first announcement</Button>
+                  </Link>
+                )
+              }
+            />
           </Card>
         ) : (
-          posts.map((p) => <PostRow key={p.id} post={p} highlight={city ? cityMatches.has(p.id) : false} />)
+          posts.map((p) => (
+            <PostCard key={p.id} post={p} cityHighlight={city ? cityMatches.has(p.id) : false} currentUserId={u.id} />
+          ))
         )}
       </div>
     </div>
   )
 }
 
-function PostRow(props: { post: Post; highlight: boolean }) {
+function PostCard(props: { post: Post; cityHighlight: boolean; currentUserId: string }) {
   const p = props.post
   const owner = db.get().users.find((u) => u.id === p.ownerUserId)
-  const matchExplanation = `${p.expertiseRequired === 'medical' ? 'Needs medical expertise' : 'Needs engineering expertise'} • ${p.projectStage.replaceAll('_', ' ')}`
+  const sc = statusConfig(p.status)
+
+  const stageLabelShort: Record<ProjectStage, string> = {
+    idea: 'Idea',
+    concept_validation: 'Concept',
+    prototype_developed: 'Prototype',
+    pilot_testing: 'Pilot',
+    pre_deployment: 'Pre-deploy',
+  }
+
+  const leftBarColor =
+    p.status === 'active'
+      ? 'bg-gradient-to-b from-teal-500 to-emerald-500'
+      : p.status === 'meeting_scheduled'
+        ? 'bg-gradient-to-b from-amber-400 to-orange-400'
+        : p.status === 'expired'
+          ? 'bg-slate-200'
+          : 'bg-gradient-to-b from-slate-300 to-slate-400'
 
   return (
-    <Link to={`/posts/${p.id}`}>
-      <Card
-        className={`relative overflow-hidden p-5 transition hover:border-slate-300 hover:bg-white ${
-          props.highlight ? 'ring-2 ring-amber-300' : ''
+    <Link to={`/posts/${p.id}`} className="group block">
+      <div
+        className={`relative flex overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-150 group-hover:shadow-md group-hover:-translate-y-0.5 ${
+          props.cityHighlight ? 'border-amber-300 ring-2 ring-amber-200' : 'border-slate-200 group-hover:border-teal-200'
         }`}
       >
-        <div
-          className={`absolute inset-y-0 left-0 w-1 ${
-            p.status === 'active'
-              ? 'bg-gradient-to-b from-emerald-500 to-sky-500'
-              : p.status === 'meeting_scheduled'
-                ? 'bg-gradient-to-b from-amber-400 to-rose-400'
-                : p.status === 'expired'
-                  ? 'bg-gradient-to-b from-rose-500 to-slate-400'
-                  : 'bg-gradient-to-b from-slate-400 to-slate-300'
-          }`}
-        />
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
+        {/* Status bar */}
+        <div className={`w-1 shrink-0 ${leftBarColor}`} />
+
+        <div className="flex flex-1 flex-col gap-3 p-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            {/* Title row */}
             <div className="flex flex-wrap items-center gap-2">
-              <div className="truncate text-base font-semibold tracking-tight">{p.title}</div>
-              <Pill tone={statusTone(p.status)}>{p.status.replaceAll('_', ' ')}</Pill>
-              {props.highlight ? <Pill tone="amber">City match</Pill> : null}
+              <h3 className="truncate text-base font-semibold text-slate-900 group-hover:text-teal-700 transition-colors">
+                {p.title}
+              </h3>
+              <Pill tone={sc.tone} dot={sc.dot}>{sc.label}</Pill>
+              {props.cityHighlight && <Pill tone="amber">City match</Pill>}
             </div>
-            <div className="mt-1 text-sm text-slate-600">
-              {p.workingDomain} • {p.city}, {p.country}
+
+            {/* Meta row */}
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+              <span className="flex items-center gap-1">
+                <svg viewBox="0 0 14 14" fill="none" className="h-3 w-3" aria-hidden="true">
+                  <circle cx="7" cy="5" r="2" stroke="currentColor" strokeWidth="1.3"/>
+                  <path d="M3.5 12v-.5a3.5 3.5 0 017 0V12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
+                {p.workingDomain}
+              </span>
+              <span>·</span>
+              <span className="flex items-center gap-1">
+                <svg viewBox="0 0 14 14" fill="none" className="h-3 w-3" aria-hidden="true">
+                  <path d="M7 1C4.79 1 3 2.79 3 5c0 3.5 4 8 4 8s4-4.5 4-8c0-2.21-1.79-4-4-4z" stroke="currentColor" strokeWidth="1.3"/>
+                </svg>
+                {p.city}, {p.country}
+              </span>
+              <span>·</span>
+              <span>Expires {p.expiryDate}</span>
             </div>
-            <div className="mt-2 text-sm text-slate-700">{p.shortExplanation}</div>
-            <div className="mt-2 text-xs text-slate-500">Match: {matchExplanation}</div>
+
+            {/* Description */}
+            <p className="mt-2 line-clamp-2 text-sm text-slate-600">{p.shortExplanation}</p>
+
+            {/* Tags */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${p.expertiseRequired === 'medical' ? 'bg-teal-50 text-teal-700' : 'bg-blue-50 text-blue-700'}`}>
+                {p.expertiseRequired === 'medical' ? '🏥 Needs medical expertise' : '⚙️ Needs engineering'}
+              </span>
+              <span className="rounded-lg bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
+                {stageLabelShort[p.projectStage]}
+              </span>
+              <span className="rounded-lg bg-slate-50 px-2.5 py-1 text-xs text-slate-600 capitalize">
+                {p.collaborationType.replaceAll('_', ' ')}
+              </span>
+            </div>
           </div>
-          <div className="shrink-0 text-sm text-slate-600">
-            <div className="text-xs text-slate-500">Posted by</div>
-            <div className="font-medium text-slate-900">{owner?.name ?? 'Unknown'}</div>
+
+          {/* Owner */}
+          <div className="flex shrink-0 items-center gap-2.5 sm:flex-col sm:items-end sm:gap-1">
+            <Avatar name={owner?.name ?? '?'} role={owner?.role} size="sm" />
+            <div className="text-right">
+              <div className="text-xs font-medium text-slate-700">{owner?.name ?? 'Unknown'}</div>
+              <div className="text-[10px] text-slate-400 capitalize">{owner?.role}</div>
+            </div>
           </div>
         </div>
-      </Card>
+      </div>
     </Link>
   )
 }
-
