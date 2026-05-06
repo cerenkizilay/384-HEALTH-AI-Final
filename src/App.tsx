@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { AppLayout } from './ui/AppLayout'
+import { AppLayout } from './ui/layout/AppLayout'
+import { RequireAuth } from './ui/guards/RequireAuth'
+import { RequireRole } from './ui/guards/RequireRole'
 import { LandingPage } from './ui/pages/LandingPage'
 import { LoginPage } from './ui/pages/LoginPage'
 import { RegisterPage } from './ui/pages/RegisterPage'
@@ -9,8 +11,6 @@ import { PostDetailPage } from './ui/pages/PostDetailPage'
 import { PostEditorPage } from './ui/pages/PostEditorPage'
 import { MyPostsPage } from './ui/pages/MyPostsPage'
 import { AdminPage } from './ui/pages/AdminPage'
-import { RequireAuth } from './ui/RequireAuth'
-import { RequireRole } from './ui/RequireRole'
 
 export default function App() {
   return (

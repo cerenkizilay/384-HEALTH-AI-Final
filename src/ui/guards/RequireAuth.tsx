@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { getCurrentUser } from '../lib/auth'
+import { getCurrentUser } from '../../lib/auth'
 
 export function RequireAuth(props: { children: ReactNode }) {
   const u = getCurrentUser()

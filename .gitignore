@@ -12,10 +12,15 @@ dist
 dist-ssr
 *.local
 
-# Environment variables (never commit secrets)
+# Environment files (contain secrets)
 .env
 .env.*
 !.env.example
+backend/.env
+docker/.env
+
+# Claude Code internal files
+.claude/
 
 # Editor directories and files
 .vscode/*

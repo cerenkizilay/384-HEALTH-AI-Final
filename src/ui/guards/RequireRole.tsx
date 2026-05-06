@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
-import type { Role } from '../lib/models'
-import { getCurrentUser } from '../lib/auth'
+import type { Role } from '../../lib/models'
+import { getCurrentUser } from '../../lib/auth'
 
 export function RequireRole(props: { role: Role; children: ReactNode }) {
   const u = getCurrentUser()
