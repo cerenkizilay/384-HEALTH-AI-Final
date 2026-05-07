@@ -377,6 +377,22 @@ function MeetingCard(props: { meeting: MeetingRequest; post: Post; isOwner: bool
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Chat butonu — yalnızca accepted meeting'lerde */}
+          {m.status === 'accepted' && (
+            <Link to={`/chat/${m.id}`}>
+              <Button
+                size="sm"
+                variant="outline"
+                icon={
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                    <path d="M3.505 2.365A41.369 41.369 0 0 1 9 2c1.863 0 3.697.124 5.495.365 1.247.167 2.318 1.108 2.47 2.456A49.954 49.954 0 0 1 17 8c0 1.106-.07 2.194-.208 3.264-.132 1.084-.96 1.948-1.97 2.188a49.913 49.913 0 0 1-3.822.515c.18.8.314 1.617.398 2.45a.5.5 0 0 1-.496.583H11a.5.5 0 0 1-.5-.5v-.011a38.47 38.47 0 0 0-.512-4.57C6.687 11.64 4 10.044 4 8V6.528A41.454 41.454 0 0 1 3.505 2.365Z" />
+                  </svg>
+                }
+              >
+                Sohbet
+              </Button>
+            </Link>
+          )}
           {canAcceptDecline && (
             <>
               <Button

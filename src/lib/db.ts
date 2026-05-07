@@ -1,4 +1,4 @@
-import type { AuditLog, InterestMessage, MeetingRequest, Post, Role, User } from './models'
+import type { AuditLog, ChatMessage, InterestMessage, MeetingRequest, Post, Role, User } from './models'
 import { readJson, writeJson } from './storage'
 import { dateOnlyIso, nowIso, uid } from './utils'
 
@@ -7,13 +7,14 @@ type Db = {
   posts: Post[]
   interests: InterestMessage[]
   meetings: MeetingRequest[]
+  chats: ChatMessage[]
   logs: AuditLog[]
 }
 
 const DB_KEY = 'healthai_db_v1'
 
 function emptyDb(): Db {
-  return { users: [], posts: [], interests: [], meetings: [], logs: [] }
+  return { users: [], posts: [], interests: [], meetings: [], chats: [], logs: [] }
 }
 
 function load(): Db {
@@ -112,6 +113,7 @@ function seedIfEmpty(db: Db): Db {
     ...db,
     users: [admin, engineer, healthcare],
     posts: [post1, post2],
+    chats: [],
   }
   save(seeded)
   return seeded

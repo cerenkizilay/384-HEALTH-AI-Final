@@ -73,6 +73,14 @@ export type MeetingRequest = {
   updatedAt: string
 }
 
+export type ChatMessage = {
+  id: string
+  meetingId: string
+  fromUserId: string
+  text: string
+  createdAt: string
+}
+
 export type AuditActionType =
   | 'login'
   | 'logout'
