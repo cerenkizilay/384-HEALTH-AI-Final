@@ -8,11 +8,11 @@ import { Card } from '../components/Ui'
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const m = Math.floor(diff / 60000)
-  if (m < 1) return 'Az önce'
-  if (m < 60) return `${m} dk önce`
+  if (m < 1) return 'Just now'
+  if (m < 60) return `${m}m ago`
   const h = Math.floor(m / 60)
-  if (h < 24) return `${h} sa önce`
-  return `${Math.floor(h / 24)} gün önce`
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
 }
 
 export function ChatsListPage() {
@@ -41,24 +41,24 @@ export function ChatsListPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Sohbetler</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Chats</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Kabul edilmiş meeting requestlarındaki özel mesajlaşmalar.
+          Private messages from your accepted meeting requests.
         </p>
       </div>
 
       {chats.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 p-12 text-center">
           <div className="text-4xl">💬</div>
-          <div className="font-medium text-slate-700">Henüz aktif sohbet yok</div>
+          <div className="font-medium text-slate-700">No active chats yet</div>
           <p className="text-sm text-slate-400">
-            Bir duyuruya meeting request gönder, request kabul edilince burada sohbet başlatabilirsin.
+            Send a meeting request on an announcement — once accepted, a chat will appear here.
           </p>
           <Link
             to="/posts"
             className="mt-1 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 transition-colors"
           >
-            Duyurulara göz at
+            Browse announcements
           </Link>
         </Card>
       ) : (
@@ -71,15 +71,14 @@ export function ChatsListPage() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-base font-bold text-white shadow-sm">
                     {other?.name.charAt(0).toUpperCase() ?? '?'}
                   </div>
-                  {/* Aktif nokta */}
                   <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-400" />
                 </div>
 
-                {/* İçerik */}
+                {/* Content */}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="truncate font-semibold text-slate-900">
-                      {other?.name ?? 'Bilinmiyor'}
+                      {other?.name ?? 'Unknown'}
                     </span>
                     {lastMsg && (
                       <span className="shrink-0 text-xs text-slate-400">{timeAgo(lastMsg.createdAt)}</span>
@@ -92,17 +91,17 @@ export function ChatsListPage() {
                     {lastMsg ? (
                       <>
                         {lastMsg.fromUserId === u.id && (
-                          <span className="text-slate-400">Sen: </span>
+                          <span className="text-slate-400">You: </span>
                         )}
                         {lastMsg.text}
                       </>
                     ) : (
-                      <span className="italic text-slate-400">Henüz mesaj yok — sohbeti başlat!</span>
+                      <span className="italic text-slate-400">No messages yet — start the conversation!</span>
                     )}
                   </div>
                 </div>
 
-                {/* Mesaj sayısı rozeti */}
+                {/* Message count badge */}
                 {messageCount > 0 && (
                   <div className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
                     {messageCount}

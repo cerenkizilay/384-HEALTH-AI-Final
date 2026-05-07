@@ -6,7 +6,7 @@ import { getMessages, sendMessage } from '../../lib/chat'
 import type { ChatMessage, MeetingRequest, User } from '../../lib/models'
 import { Card } from '../components/Ui'
 
-// ─── Zaman formatı ────────────────────────────────────────────────────────────
+// ─── Time formatter ───────────────────────────────────────────────────────────
 function formatTime(iso: string) {
   const d = new Date(iso)
   const now = new Date()
@@ -19,7 +19,7 @@ function formatTime(iso: string) {
   return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`
 }
 
-// ─── Mesaj balonu ─────────────────────────────────────────────────────────────
+// ─── Message bubble ───────────────────────────────────────────────────────────
 function MessageBubble(props: { msg: ChatMessage; isMine: boolean; senderName: string }) {
   const { msg, isMine, senderName } = props
   return (
@@ -33,7 +33,7 @@ function MessageBubble(props: { msg: ChatMessage; isMine: boolean; senderName: s
         {senderName.charAt(0).toUpperCase()}
       </div>
 
-      {/* Balon */}
+      {/* Bubble */}
       <div className={`max-w-[72%] ${isMine ? 'items-end' : 'items-start'} flex flex-col gap-0.5`}>
         {!isMine && (
           <span className="ml-1 text-xs text-slate-400">{senderName}</span>
@@ -67,7 +67,6 @@ export function ChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Meeting ve post bilgilerini çek
   const data = db.get()
   const meeting: MeetingRequest | undefined = data.meetings.find((m) => m.id === meetingId)
   const post = meeting ? data.posts.find((p) => p.id === meeting.postId) : undefined
@@ -78,12 +77,10 @@ export function ChatPage() {
     : undefined
   const other: User | undefined = otherUserId ? data.users.find((x) => x.id === otherUserId) : undefined
 
-  // Yetki kontrolü
-  const isParty =
-    meeting && (meeting.fromUserId === u.id || meeting.toUserId === u.id)
+  const isParty = meeting && (meeting.fromUserId === u.id || meeting.toUserId === u.id)
   const chatActive = meeting?.status === 'accepted'
 
-  // Mesajları yükle + 2 sn'de bir güncelle (localStorage polling)
+  // Load messages + poll every 2s
   useEffect(() => {
     if (!meetingId || !chatActive) return
     const load = () => setMessages(getMessages(meetingId))
@@ -92,18 +89,18 @@ export function ChatPage() {
     return () => window.clearInterval(interval)
   }, [meetingId, chatActive])
 
-  // Yeni mesaj gelince en alta kaydır
+  // Scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // ── Hata durumları ────────────────────────────────────────────────────────
+  // ── Error states ──────────────────────────────────────────────────────────
   if (!meeting || !isParty) {
     return (
       <Card className="p-8 text-center">
-        <div className="text-sm text-slate-500">Bu sohbete erişim yetkiniz yok.</div>
+        <div className="text-sm text-slate-500">You don't have access to this chat.</div>
         <Link to="/posts" className="mt-4 inline-block text-sm text-teal-600 hover:underline">
-          ← Duyurulara dön
+          ← Back to announcements
         </Link>
       </Card>
     )
@@ -113,19 +110,19 @@ export function ChatPage() {
     return (
       <Card className="p-8 text-center">
         <div className="text-sm text-slate-500">
-          Chat yalnızca kabul edilmiş meeting requestlarda aktiftir.
+          Chat is only available for accepted meeting requests.
         </div>
         <Link
           to={`/posts/${meeting.postId}`}
           className="mt-4 inline-block text-sm text-teal-600 hover:underline"
         >
-          ← Post'a dön
+          ← Back to post
         </Link>
       </Card>
     )
   }
 
-  // ── Mesaj gönder ──────────────────────────────────────────────────────────
+  // ── Send message ──────────────────────────────────────────────────────────
   function handleSend() {
     if (!text.trim() || sending || !meetingId) return
     setSending(true)
@@ -136,7 +133,7 @@ export function ChatPage() {
       setMessages(getMessages(meetingId))
       inputRef.current?.focus()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gönderilemedi.')
+      setError(err instanceof Error ? err.message : 'Failed to send.')
     } finally {
       setSending(false)
     }
@@ -157,7 +154,7 @@ export function ChatPage() {
         <Link
           to={`/posts/${meeting.postId}`}
           className="text-slate-400 hover:text-teal-600 transition-colors"
-          title="Post'a dön"
+          title="Back to post"
         >
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
             <path
@@ -167,13 +164,11 @@ export function ChatPage() {
             />
           </svg>
         </Link>
-        <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-300 text-sm font-semibold text-white"
-        >
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-300 text-sm font-semibold text-white">
           {other?.name.charAt(0).toUpperCase() ?? '?'}
         </div>
         <div className="min-w-0">
-          <div className="truncate font-semibold text-slate-900">{other?.name ?? 'Bilinmiyor'}</div>
+          <div className="truncate font-semibold text-slate-900">{other?.name ?? 'Unknown'}</div>
           <div className="truncate text-xs text-slate-500">
             {post?.title ?? 'Post'}
             {meeting.selectedSlot && (
@@ -183,20 +178,18 @@ export function ChatPage() {
         </div>
         <span className="ml-auto flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-          Aktif
+          Active
         </span>
       </div>
 
-      {/* Mesaj listesi */}
+      {/* Message list */}
       <div className="flex-1 overflow-y-auto border border-b-0 border-slate-200 bg-slate-50 px-4 py-5">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <div className="text-3xl">💬</div>
-            <div className="text-sm font-medium text-slate-600">
-              Henüz mesaj yok
-            </div>
+            <div className="text-sm font-medium text-slate-600">No messages yet</div>
             <div className="text-xs text-slate-400">
-              Buluşma yeri, saat veya proje detaylarını konuşabilirsiniz.
+              Discuss the meeting venue, time, or project details here.
             </div>
           </div>
         ) : (
@@ -218,7 +211,7 @@ export function ChatPage() {
         )}
       </div>
 
-      {/* Input alanı */}
+      {/* Input area */}
       <div className="rounded-b-2xl border border-slate-200 bg-white px-4 py-3">
         {error && (
           <div className="mb-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>
@@ -230,7 +223,7 @@ export function ChatPage() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Mesaj yaz… (Enter gönderir, Shift+Enter yeni satır)"
+            placeholder="Type a message… (Enter to send, Shift+Enter for new line)"
             className="flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100 max-h-32"
             style={{ fieldSizing: 'content' } as React.CSSProperties}
           />
@@ -239,7 +232,7 @@ export function ChatPage() {
             onClick={handleSend}
             disabled={!text.trim() || sending}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-40"
-            title="Gönder"
+            title="Send"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5 rotate-90">
               <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.903 6.308H10.5a.75.75 0 0 1 0 1.5H4.182l-1.903 6.308a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.288Z" />

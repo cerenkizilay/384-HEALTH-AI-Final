@@ -13,15 +13,14 @@ export function getMessages(meetingId: string): ChatMessage[] {
 /** Yeni mesaj gönder. Kullanıcı meeting'in tarafı olmalı. */
 export function sendMessage(params: { meetingId: string; fromUserId: string; text: string }): ChatMessage {
   const text = params.text.trim()
-  if (!text) throw new Error('Mesaj boş olamaz.')
-  if (text.length > 2000) throw new Error('Mesaj en fazla 2000 karakter olabilir.')
+  if (!text) throw new Error('Message cannot be empty.')
+  if (text.length > 2000) throw new Error('Message must be 2000 characters or fewer.')
 
-  // Kullanıcının bu meeting'in tarafı olduğunu doğrula
   const meeting = db.get().meetings.find((m) => m.id === params.meetingId)
-  if (!meeting) throw new Error('Meeting bulunamadı.')
-  if (meeting.status !== 'accepted') throw new Error('Chat sadece kabul edilmiş meeting requestlarda aktiftir.')
+  if (!meeting) throw new Error('Meeting not found.')
+  if (meeting.status !== 'accepted') throw new Error('Chat is only available for accepted meeting requests.')
   const isParty = meeting.fromUserId === params.fromUserId || meeting.toUserId === params.fromUserId
-  if (!isParty) throw new Error('Bu sohbete erişim yetkiniz yok.')
+  if (!isParty) throw new Error('You do not have access to this chat.')
 
   const msg: ChatMessage = {
     id: uid('msg'),
