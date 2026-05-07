@@ -10,6 +10,7 @@ import { PostsPage } from './ui/pages/PostsPage'
 import { PostDetailPage } from './ui/pages/PostDetailPage'
 import { PostEditorPage } from './ui/pages/PostEditorPage'
 import { MyPostsPage } from './ui/pages/MyPostsPage'
+import { ChatsListPage } from './ui/pages/ChatsListPage'
 import { ChatPage } from './ui/pages/ChatPage'
 import { AdminPage } from './ui/pages/AdminPage'
 
@@ -60,6 +61,15 @@ export default function App() {
           element={
             <RequireAuth>
               <MyPostsPage />
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="chats"
+          element={
+            <RequireAuth>
+              <ChatsListPage />
             </RequireAuth>
           }
         />

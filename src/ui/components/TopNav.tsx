@@ -10,9 +10,16 @@ export function TopNav() {
   const u = getCurrentUser()
   const [menuOpen, setMenuOpen] = useState(false)
 
-  const pendingMeetings = u
-    ? db.get().meetings.filter((m) => m.status === 'pending' && (m.toUserId === u.id || m.fromUserId === u.id)).length
-    : 0
+  const { pendingMeetings, activeChats } = (() => {
+    if (!u) return { pendingMeetings: 0, activeChats: 0 }
+    const meetings = db.get().meetings.filter(
+      (m) => m.fromUserId === u.id || m.toUserId === u.id,
+    )
+    return {
+      pendingMeetings: meetings.filter((m) => m.status === 'pending').length,
+      activeChats: meetings.filter((m) => m.status === 'accepted').length,
+    }
+  })()
 
   const roleTone = u?.role === 'engineer' ? 'blue' : u?.role === 'healthcare' ? 'teal' : 'violet'
   const roleLabel = u ? db.roleLabel(u.role) : ''
@@ -20,6 +27,7 @@ export function TopNav() {
   const navLinks = [
     { path: '/posts', label: 'Announcements' },
     ...(u ? [{ path: '/my-posts', label: 'My Posts' }] : []),
+    ...(u ? [{ path: '/chats', label: 'Chats' }] : []),
     ...(u?.role === 'admin' ? [{ path: '/admin', label: 'Admin' }] : []),
   ]
 
@@ -63,6 +71,11 @@ export function TopNav() {
                 {link.path === '/my-posts' && pendingMeetings > 0 && (
                   <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
                     {pendingMeetings}
+                  </span>
+                )}
+                {link.path === '/chats' && activeChats > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-teal-500 text-[10px] font-bold text-white">
+                    {activeChats}
                   </span>
                 )}
               </Link>
@@ -155,6 +168,11 @@ export function TopNav() {
                   {link.path === '/my-posts' && pendingMeetings > 0 && (
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white">
                       {pendingMeetings}
+                    </span>
+                  )}
+                  {link.path === '/chats' && activeChats > 0 && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-500 text-xs font-bold text-white">
+                      {activeChats}
                     </span>
                   )}
                 </Link>
