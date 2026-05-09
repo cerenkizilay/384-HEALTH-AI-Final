@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: healthai-auth-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
