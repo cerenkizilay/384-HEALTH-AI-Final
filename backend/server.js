@@ -160,6 +160,14 @@ function dateOnlyIso(d) {
   return `${year}-${month}-${day}`
 }
 
+let _initPromise = null
+
+function ensureDb() {
+  if (!pool) return Promise.reject(new Error('No pool'))
+  if (!_initPromise) _initPromise = initDb().catch((err) => { _initPromise = null; throw err })
+  return _initPromise
+}
+
 async function initDb() {
   if (!pool) return
 
@@ -394,11 +402,26 @@ app.post('/auth/verify-code', (req, res) => {
   return res.json({ message: 'Email verified.' })
 })
 
+// ─── Manual DB init endpoint ─────────────────────────────────────────────────
+app.post('/api/init', async (_req, res) => {
+  try {
+    _initPromise = null // reset so it retries
+    await ensureDb()
+    res.json({ ok: true, message: 'DB initialized.' })
+  } catch (err) {
+    console.error('Manual init failed:', err)
+    res.status(500).json({ message: 'Init failed: ' + err.message })
+  }
+})
+
 // ─── DB middleware guard ──────────────────────────────────────────────────────
 
 function requireDb(req, res, next) {
   if (!pool) return res.status(503).json({ message: 'Database not configured.' })
-  next()
+  ensureDb().then(() => next()).catch((err) => {
+    console.error('DB init error in requireDb:', err)
+    res.status(503).json({ message: 'Database initializing, please retry in a moment.' })
+  })
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -483,12 +506,16 @@ app.put('/api/users/:id', requireDb, async (req, res) => {
 
 async function autoExpirePosts() {
   if (!pool) return
-  const today = dateOnlyIso(new Date())
-  await pool.query(
-    `UPDATE posts SET status = 'expired', updated_at = $1
-     WHERE (status = 'active' OR status = 'draft') AND expiry_date < $2`,
-    [nowIso(), today],
-  )
+  try {
+    const today = dateOnlyIso(new Date())
+    await pool.query(
+      `UPDATE posts SET status = 'expired', updated_at = $1
+       WHERE (status = 'active' OR status = 'draft') AND expiry_date < $2`,
+      [nowIso(), today],
+    )
+  } catch (err) {
+    console.error('autoExpirePosts error:', err.message)
+  }
 }
 
 app.get('/api/posts', requireDb, async (_req, res) => {
