@@ -28,7 +28,11 @@ export async function apiGetUser(id: string): Promise<User> {
 }
 
 export async function apiGetUserByEmail(email: string): Promise<User | null> {
-  return request<User | null>('GET', `/api/users/by-email/${encodeURIComponent(email)}`)
+  try {
+    return await request<User>('GET', `/api/users/by-email/${encodeURIComponent(email)}`)
+  } catch {
+    return null
+  }
 }
 
 export async function apiCreateUser(u: User): Promise<User> {

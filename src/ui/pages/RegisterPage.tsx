@@ -44,6 +44,7 @@ export function RegisterPage() {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Exclude<Role, 'admin'>>('engineer')
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   return (
     <div className="mx-auto max-w-lg py-4">
@@ -64,14 +65,17 @@ export function RegisterPage() {
       <Card className="p-7">
         <form
           className="grid gap-6"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault()
             setError(null)
+            setBusy(true)
             try {
-              register({ name, email, role })
+              await register({ name, email, role })
               nav('/verify-email', { state: { email } })
             } catch (err) {
               setError(err instanceof Error ? err.message : 'Registration failed.')
+            } finally {
+              setBusy(false)
             }
           }}
         >
@@ -138,8 +142,8 @@ export function RegisterPage() {
 
           {error && <Alert tone="error">{error}</Alert>}
 
-          <Button type="submit" size="lg" className="w-full">
-            Create account
+          <Button type="submit" size="lg" className="w-full" disabled={busy}>
+            {busy ? 'Creating account…' : 'Create account'}
           </Button>
 
           <div className="text-center text-sm text-slate-500">

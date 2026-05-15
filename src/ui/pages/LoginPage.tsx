@@ -10,6 +10,7 @@ export function LoginPage() {
 
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   return (
     <div className="mx-auto max-w-lg py-4">
@@ -56,14 +57,17 @@ export function LoginPage() {
 
         <form
           className="grid gap-5"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault()
             setError(null)
+            setBusy(true)
             try {
-              login(email)
+              await login(email)
               nav(from, { replace: true })
             } catch (err) {
               setError(err instanceof Error ? err.message : 'Login failed.')
+            } finally {
+              setBusy(false)
             }
           }}
         >
@@ -78,8 +82,8 @@ export function LoginPage() {
 
           {error && <Alert tone="error">{error}</Alert>}
 
-          <Button type="submit" size="lg" className="w-full" disabled={!email}>
-            Sign in
+          <Button type="submit" size="lg" className="w-full" disabled={!email || busy}>
+            {busy ? 'Signing in…' : 'Sign in'}
           </Button>
 
           <div className="text-center text-sm text-slate-500">
