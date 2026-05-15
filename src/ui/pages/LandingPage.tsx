@@ -1,12 +1,21 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getCurrentUser } from '../../lib/auth'
-import { db } from '../../lib/db'
+import { apiGetPosts } from '../../lib/api'
 
 export function LandingPage() {
   const u = getCurrentUser()
-  const data = db.get()
-  const activePosts = data.posts.filter((p) => p.status === 'active').length
-  const closedPosts = data.posts.filter((p) => p.status === 'closed').length
+  const [activePosts, setActivePosts] = useState(0)
+  const [closedPosts, setClosedPosts] = useState(0)
+
+  useEffect(() => {
+    apiGetPosts()
+      .then((posts) => {
+        setActivePosts(posts.filter((p) => p.status === 'active').length)
+        setClosedPosts(posts.filter((p) => p.status === 'closed').length)
+      })
+      .catch(() => {})
+  }, [])
 
   return (
     <div className="grid gap-16">

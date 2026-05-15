@@ -1,9 +1,9 @@
-import { useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getCurrentUser } from '../../lib/auth'
-import { db } from '../../lib/db'
+import { apiGetUserPosts, apiGetMeetingsForUser, apiGetMeetingsForPost, apiGetUser } from '../../lib/api'
 import { changePostStatus } from '../../lib/posts'
-import type { Post, PostStatus, MeetingRequest } from '../../lib/models'
+import type { Post, PostStatus, MeetingRequest, User } from '../../lib/models'
 import { Avatar, Button, Card, EmptyState, Pill, StatCard } from '../components/Ui'
 
 function statusConfig(s: PostStatus): { label: string; tone: 'slate' | 'green' | 'amber' | 'rose' | 'blue' | 'teal' | 'violet'; dot: boolean } {
@@ -18,20 +18,22 @@ export function MyPostsPage() {
   const u = getCurrentUser()!
   const nav = useNavigate()
 
-  const { myPosts, incomingMeetings, outgoingMeetings } = useMemo(() => {
-    const data = db.get()
-    const myPosts = data.posts
-      .filter((p) => p.ownerUserId === u.id)
-      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+  const [myPosts, setMyPosts] = useState<Post[]>([])
+  const [incomingMeetings, setIncomingMeetings] = useState<MeetingRequest[]>([])
+  const [outgoingMeetings, setOutgoingMeetings] = useState<MeetingRequest[]>([])
 
-    const incomingMeetings = data.meetings.filter(
-      (m) => m.toUserId === u.id && m.status === 'pending',
-    )
-    const outgoingMeetings = data.meetings.filter(
-      (m) => m.fromUserId === u.id && m.status === 'pending',
-    )
+  const loadData = async () => {
+    const [posts, allMeetings] = await Promise.all([
+      apiGetUserPosts(u.id),
+      apiGetMeetingsForUser(u.id),
+    ])
+    setMyPosts(posts.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)))
+    setIncomingMeetings(allMeetings.filter((m) => m.toUserId === u.id && m.status === 'pending'))
+    setOutgoingMeetings(allMeetings.filter((m) => m.fromUserId === u.id && m.status === 'pending'))
+  }
 
-    return { myPosts, incomingMeetings, outgoingMeetings }
+  useEffect(() => {
+    loadData().catch(console.error)
   }, [u.id])
 
   const activePosts = myPosts.filter((p) => p.status === 'active').length
@@ -123,7 +125,7 @@ export function MyPostsPage() {
         ) : (
           <div className="grid gap-3">
             {myPosts.map((p) => (
-              <MyPostCard key={p.id} post={p} onChanged={() => nav(0)} />
+              <MyPostCard key={p.id} post={p} onChanged={loadData} />
             ))}
           </div>
         )}
@@ -137,8 +139,15 @@ function MyPostCard(props: { post: Post; onChanged: () => void }) {
   const u = getCurrentUser()!
   const sc = statusConfig(p.status)
 
-  const meetingCount = db.get().meetings.filter((m) => m.postId === p.id).length
-  const pendingCount = db.get().meetings.filter((m) => m.postId === p.id && m.status === 'pending').length
+  const [meetingCount, setMeetingCount] = useState(0)
+  const [pendingCount, setPendingCount] = useState(0)
+
+  useEffect(() => {
+    apiGetMeetingsForPost(p.id).then((meetings) => {
+      setMeetingCount(meetings.length)
+      setPendingCount(meetings.filter((m) => m.status === 'pending').length)
+    }).catch(() => {})
+  }, [p.id])
 
   const leftBarColor =
     p.status === 'active'
@@ -186,9 +195,9 @@ function MyPostCard(props: { post: Post; onChanged: () => void }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
+              onClick={async () => {
                 if (confirm('Mark this post as "Partner Found" and close it?')) {
-                  changePostStatus(p.id, u.id, u.role, 'closed')
+                  await changePostStatus(p.id, u.id, u.role, 'closed')
                   props.onChanged()
                 }
               }}
@@ -204,11 +213,24 @@ function MyPostCard(props: { post: Post; onChanged: () => void }) {
 
 function MeetingRequestCard(props: { meeting: MeetingRequest; type: 'incoming' | 'outgoing' }) {
   const m = props.meeting
-  const data = db.get()
-
   const otherUserId = props.type === 'incoming' ? m.fromUserId : m.toUserId
-  const other = data.users.find((x) => x.id === otherUserId)
-  const post = data.posts.find((p) => p.id === m.postId)
+
+  const [other, setOther] = useState<User | undefined>(undefined)
+  const [post, setPost] = useState<Post | undefined>(undefined)
+
+  useEffect(() => {
+    apiGetUser(otherUserId).then(setOther).catch(() => {})
+    apiGetMeetingsForPost(m.postId)
+      // We need the post — import apiGetPost
+      .catch(() => {})
+  }, [otherUserId, m.postId])
+
+  // Fetch post separately
+  useEffect(() => {
+    import('../../lib/api').then(({ apiGetPost }) => {
+      apiGetPost(m.postId).then((p) => { if (p) setPost(p) }).catch(() => {})
+    })
+  }, [m.postId])
 
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
@@ -221,7 +243,7 @@ function MeetingRequestCard(props: { meeting: MeetingRequest; type: 'incoming' |
           </span>
         </div>
         <div className="mt-0.5 text-xs text-slate-600 truncate">
-          Re: {post?.title ?? 'Unknown post'}
+          Re: {post?.title ?? 'Loading…'}
         </div>
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {m.proposedSlots.slice(0, 3).map((s) => (

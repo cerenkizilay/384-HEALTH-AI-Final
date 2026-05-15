@@ -1,62 +1,84 @@
-import { useMemo, useState } from 'react'
-import { db } from '../../lib/db'
+import { useEffect, useMemo, useState } from 'react'
 import { getCurrentUser } from '../../lib/auth'
+import { apiGetAllUsers, apiGetPosts, apiGetMeetingsForUser, apiGetAuditLogs, apiUpdateUser } from '../../lib/api'
 import { removePostAdmin } from '../../lib/posts'
 import { audit } from '../../lib/audit'
-import type { Role } from '../../lib/models'
+import type { AuditLog, MeetingRequest, Post, Role, User } from '../../lib/models'
 import { Avatar, Button, Card, Pill, StatCard, TextInput } from '../components/Ui'
 
 type Tab = 'overview' | 'posts' | 'users' | 'logs'
 
 export function AdminPage() {
   const u = getCurrentUser()!
-  const data = db.get()
 
   const [tab, setTab] = useState<Tab>('overview')
+  const [users, setUsers] = useState<User[]>([])
+  const [posts, setPosts] = useState<Post[]>([])
+  const [meetings, setMeetings] = useState<MeetingRequest[]>([])
+  const [logs, setLogs] = useState<AuditLog[]>([])
+
   const [postCity, setPostCity] = useState('')
   const [postDomain, setPostDomain] = useState('')
   const [postStatus, setPostStatus] = useState('')
   const [userRole, setUserRole] = useState<Role | ''>('')
   const [logQ, setLogQ] = useState('')
 
+  const loadData = async () => {
+    const [fetchedUsers, fetchedPosts, fetchedLogs] = await Promise.all([
+      apiGetAllUsers().catch(() => [] as User[]),
+      apiGetPosts().catch(() => [] as Post[]),
+      apiGetAuditLogs().catch(() => [] as AuditLog[]),
+    ])
+    setUsers(fetchedUsers)
+    setPosts(fetchedPosts)
+    setLogs(fetchedLogs)
+    // Load meetings for all users — use first user fetch as a proxy for admin
+    // We can get all meetings by fetching for admin user
+    apiGetMeetingsForUser(u.id).then(setMeetings).catch(() => {})
+  }
+
+  useEffect(() => {
+    loadData().catch(console.error)
+  }, [])
+
   const filteredPosts = useMemo(() => {
-    return data.posts.filter((p) => {
+    return posts.filter((p) => {
       if (postCity && p.city.toLowerCase() !== postCity.trim().toLowerCase()) return false
       if (postDomain && !p.workingDomain.toLowerCase().includes(postDomain.trim().toLowerCase())) return false
       if (postStatus && p.status !== postStatus) return false
       return true
     })
-  }, [data.posts, postCity, postDomain, postStatus])
+  }, [posts, postCity, postDomain, postStatus])
 
   const filteredUsers = useMemo(() => {
-    return data.users.filter((x) => {
+    return users.filter((x) => {
       if (userRole && x.role !== userRole) return false
       return true
     })
-  }, [data.users, userRole])
+  }, [users, userRole])
 
   const filteredLogs = useMemo(() => {
     const q = logQ.trim().toLowerCase()
-    if (!q) return data.logs.slice(0, 200)
-    return data.logs
+    if (!q) return logs.slice(0, 200)
+    return logs
       .filter((l) => {
         const hay = `${l.at} ${l.actionType} ${l.userId ?? ''} ${l.role ?? ''} ${l.targetEntity ?? ''} ${l.details ?? ''}`.toLowerCase()
         return hay.includes(q)
       })
       .slice(0, 200)
-  }, [data.logs, logQ])
+  }, [logs, logQ])
 
   // Stats
-  const activePosts = data.posts.filter((p) => p.status === 'active').length
-  const closedPosts = data.posts.filter((p) => p.status === 'closed').length
-  const pendingMeetings = data.meetings.filter((m) => m.status === 'pending').length
-  const verifiedUsers = data.users.filter((u) => u.verified).length
+  const activePosts = posts.filter((p) => p.status === 'active').length
+  const closedPosts = posts.filter((p) => p.status === 'closed').length
+  const pendingMeetings = meetings.filter((m) => m.status === 'pending').length
+  const verifiedUsers = users.filter((x) => x.verified).length
 
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: 'overview', label: 'Overview' },
-    { id: 'posts', label: `Posts (${data.posts.length})` },
-    { id: 'users', label: `Users (${data.users.length})` },
-    { id: 'logs', label: `Logs (${data.logs.length})` },
+    { id: 'posts', label: `Posts (${posts.length})` },
+    { id: 'users', label: `Users (${users.length})` },
+    { id: 'logs', label: `Logs (${logs.length})` },
   ]
 
   return (
@@ -90,7 +112,7 @@ export function AdminPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               label="Total users"
-              value={data.users.length}
+              value={users.length}
               tone="teal"
               icon={
                 <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" aria-hidden="true">
@@ -141,11 +163,11 @@ export function AdminPage() {
               <div className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-3">User breakdown</div>
               <div className="grid gap-2">
                 {[
-                  { label: 'Engineers', value: data.users.filter((u) => u.role === 'engineer').length, tone: 'blue' as const },
-                  { label: 'Healthcare', value: data.users.filter((u) => u.role === 'healthcare').length, tone: 'teal' as const },
-                  { label: 'Admins', value: data.users.filter((u) => u.role === 'admin').length, tone: 'violet' as const },
+                  { label: 'Engineers', value: users.filter((x) => x.role === 'engineer').length, tone: 'blue' as const },
+                  { label: 'Healthcare', value: users.filter((x) => x.role === 'healthcare').length, tone: 'teal' as const },
+                  { label: 'Admins', value: users.filter((x) => x.role === 'admin').length, tone: 'violet' as const },
                   { label: 'Verified', value: verifiedUsers, tone: 'teal' as const },
-                  { label: 'Suspended', value: data.users.filter((u) => u.suspended).length, tone: 'slate' as const },
+                  { label: 'Suspended', value: users.filter((x) => x.suspended).length, tone: 'slate' as const },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between text-sm">
                     <span className="text-slate-600">{row.label}</span>
@@ -160,10 +182,10 @@ export function AdminPage() {
               <div className="grid gap-2">
                 {[
                   { label: 'Active', value: activePosts },
-                  { label: 'Meeting scheduled', value: data.posts.filter((p) => p.status === 'meeting_scheduled').length },
+                  { label: 'Meeting scheduled', value: posts.filter((p) => p.status === 'meeting_scheduled').length },
                   { label: 'Partner found', value: closedPosts },
-                  { label: 'Expired', value: data.posts.filter((p) => p.status === 'expired').length },
-                  { label: 'Draft', value: data.posts.filter((p) => p.status === 'draft').length },
+                  { label: 'Expired', value: posts.filter((p) => p.status === 'expired').length },
+                  { label: 'Draft', value: posts.filter((p) => p.status === 'draft').length },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between text-sm">
                     <span className="text-slate-600">{row.label}</span>
@@ -178,10 +200,10 @@ export function AdminPage() {
               <div className="grid gap-2">
                 {[
                   { label: 'Pending', value: pendingMeetings },
-                  { label: 'Accepted', value: data.meetings.filter((m) => m.status === 'accepted').length },
-                  { label: 'Declined', value: data.meetings.filter((m) => m.status === 'declined').length },
-                  { label: 'Cancelled', value: data.meetings.filter((m) => m.status === 'cancelled').length },
-                  { label: 'Total log entries', value: data.logs.length },
+                  { label: 'Accepted', value: meetings.filter((m) => m.status === 'accepted').length },
+                  { label: 'Declined', value: meetings.filter((m) => m.status === 'declined').length },
+                  { label: 'Cancelled', value: meetings.filter((m) => m.status === 'cancelled').length },
+                  { label: 'Total log entries', value: logs.length },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between text-sm">
                     <span className="text-slate-600">{row.label}</span>
@@ -209,7 +231,7 @@ export function AdminPage() {
 
           <div className="grid gap-2">
             {filteredPosts.map((p) => {
-              const owner = data.users.find((x) => x.id === p.ownerUserId)
+              const owner = users.find((x) => x.id === p.ownerUserId)
               return (
                 <div
                   key={p.id}
@@ -227,10 +249,10 @@ export function AdminPage() {
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() => {
+                    onClick={async () => {
                       if (confirm('Remove this post? This cannot be undone.')) {
-                        removePostAdmin(p.id, u.id)
-                        window.location.reload()
+                        await removePostAdmin(p.id, u.id)
+                        await loadData()
                       }
                     }}
                   >
@@ -273,7 +295,7 @@ export function AdminPage() {
 
           <div className="grid gap-2">
             {filteredUsers.map((x) => (
-              <UserRow key={x.id} userId={x.id} currentAdminId={u.id} />
+              <UserRow key={x.id} user={x} currentAdminId={u.id} onChanged={loadData} />
             ))}
           </div>
         </Card>
@@ -353,9 +375,8 @@ export function AdminPage() {
   )
 }
 
-function UserRow(props: { userId: string; currentAdminId: string }) {
-  const data = db.get()
-  const user = data.users.find((x) => x.id === props.userId)!
+function UserRow(props: { user: User; currentAdminId: string; onChanged: () => void }) {
+  const user = props.user
   const [confirmSuspend, setConfirmSuspend] = useState(false)
 
   const roleTone = user.role === 'engineer' ? 'blue' : user.role === 'healthcare' ? 'teal' : 'violet'
@@ -381,11 +402,8 @@ function UserRow(props: { userId: string; currentAdminId: string }) {
             <Button
               size="sm"
               variant={user.suspended ? 'primary' : 'danger'}
-              onClick={() => {
-                db.update((d) => {
-                  const idx = d.users.findIndex((x) => x.id === user.id)
-                  d.users[idx] = { ...d.users[idx], suspended: !d.users[idx].suspended }
-                })
+              onClick={async () => {
+                await apiUpdateUser(user.id, { suspended: !user.suspended })
                 audit({
                   userId: props.currentAdminId,
                   role: 'admin',
@@ -393,7 +411,8 @@ function UserRow(props: { userId: string; currentAdminId: string }) {
                   result: 'success',
                   targetEntity: user.id,
                 })
-                window.location.reload()
+                setConfirmSuspend(false)
+                props.onChanged()
               }}
             >
               Yes

@@ -12,7 +12,7 @@ export function isInstitutionalEduEmail(emailRaw: string) {
   // Simple validation: local-part and domain must exist.
   if (at <= 0 || at >= email.length - 1) return false
   const domain = email.slice(at + 1)
-  return domain.includes('.')
+  return domain.endsWith('.edu') || domain.endsWith('.edu.tr')
 }
 
 export function dateOnlyIso(d: Date) {

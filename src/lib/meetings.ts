@@ -1,15 +1,15 @@
 import type { MeetingRequest } from './models'
+import { apiCreateMeeting, apiUpdateMeeting } from './api'
 import { audit } from './audit'
-import { db } from './db'
 import { nowIso, uid } from './utils'
 
-export function createMeetingRequest(params: {
+export async function createMeetingRequest(params: {
   postId: string
   fromUserId: string
   toUserId: string
   ndaAccepted: boolean
   proposedSlots: string[]
-}) {
+}): Promise<MeetingRequest> {
   if (!params.ndaAccepted) throw new Error('You must accept the NDA to send a meeting request.')
   if (params.proposedSlots.length === 0) throw new Error('Please propose at least one time slot.')
 
@@ -25,31 +25,21 @@ export function createMeetingRequest(params: {
     createdAt: at,
     updatedAt: at,
   }
-  db.update((d) => {
-    d.meetings.unshift(mr)
-  })
-  audit({ userId: params.fromUserId, actionType: 'meeting_request_create', result: 'success', targetEntity: mr.id })
-  return mr
+  const created = await apiCreateMeeting(mr)
+  audit({ userId: params.fromUserId, actionType: 'meeting_request_create', result: 'success', targetEntity: created.id })
+  return created
 }
 
-export function updateMeetingRequest(params: {
+export async function updateMeetingRequest(params: {
   meetingId: string
   actingUserId: string
   status?: 'accepted' | 'declined' | 'cancelled'
   selectedSlot?: string
-}) {
+}): Promise<void> {
   const at = nowIso()
-  db.update((d) => {
-    const idx = d.meetings.findIndex((m) => m.id === params.meetingId)
-    if (idx < 0) throw new Error('Meeting request not found.')
-    const cur = d.meetings[idx]
-    const isParty = cur.fromUserId === params.actingUserId || cur.toUserId === params.actingUserId
-    if (!isParty) throw new Error('Not allowed.')
-    const next: MeetingRequest = { ...cur, updatedAt: at }
-    if (params.status) next.status = params.status
-    if (params.selectedSlot) next.selectedSlot = params.selectedSlot
-    d.meetings[idx] = next
-  })
+  const patch: Partial<MeetingRequest> = { updatedAt: at }
+  if (params.status) patch.status = params.status
+  if (params.selectedSlot) patch.selectedSlot = params.selectedSlot
+  await apiUpdateMeeting(params.meetingId, patch)
   audit({ userId: params.actingUserId, actionType: 'meeting_request_update', result: 'success', targetEntity: params.meetingId })
 }
-

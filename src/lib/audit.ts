@@ -1,5 +1,5 @@
-import type { AuditActionType, AuditLog, Role } from './models'
-import { db } from './db'
+import type { AuditActionType, Role } from './models'
+import { apiCreateAudit } from './api'
 import { nowIso, uid } from './utils'
 
 export function audit(params: {
@@ -9,8 +9,8 @@ export function audit(params: {
   targetEntity?: string
   result: 'success' | 'failure'
   details?: string
-}) {
-  const entry: AuditLog = {
+}): void {
+  apiCreateAudit({
     id: uid('log'),
     at: nowIso(),
     userId: params.userId,
@@ -19,11 +19,5 @@ export function audit(params: {
     targetEntity: params.targetEntity,
     result: params.result,
     details: params.details,
-  }
-  db.update((d) => {
-    d.logs.unshift(entry)
-    // keep logs bounded in demo
-    d.logs = d.logs.slice(0, 2000)
-  })
+  }).catch(() => {})
 }
-

@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getCurrentUser } from '../../lib/auth'
-import { db } from '../../lib/db'
-import type { Post, PostStatus, ProjectStage } from '../../lib/models'
+import { apiGetAllUsers, apiGetPosts } from '../../lib/api'
+import type { Post, PostStatus, ProjectStage, User } from '../../lib/models'
 import { Avatar, Button, Card, EmptyState, Pill, Select, TextInput } from '../components/Ui'
 
 const stageLabels: Record<ProjectStage, string> = {
@@ -23,8 +23,9 @@ function statusConfig(s: PostStatus): { label: string; tone: 'slate' | 'green' |
 
 export function PostsPage() {
   const u = getCurrentUser()!
-  const data = db.get()
 
+  const [allPosts, setAllPosts] = useState<Post[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [q, setQ] = useState('')
   const [domain, setDomain] = useState('')
   const [city, setCity] = useState('')
@@ -33,9 +34,14 @@ export function PostsPage() {
   const [status, setStatus] = useState<PostStatus | ''>('active')
   const [filtersOpen, setFiltersOpen] = useState(true)
 
+  useEffect(() => {
+    apiGetPosts().then(setAllPosts).catch(console.error)
+    apiGetAllUsers().then(setUsers).catch(console.error)
+  }, [])
+
   const posts = useMemo(() => {
     const query = q.trim().toLowerCase()
-    return data.posts
+    return allPosts
       .filter((p) => {
         if (status && p.status !== status) return false
         if (domain && !p.workingDomain.toLowerCase().includes(domain.trim().toLowerCase())) return false
@@ -47,7 +53,7 @@ export function PostsPage() {
         return hay.includes(query)
       })
       .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
-  }, [q, domain, city, country, stage, status, data.posts])
+  }, [q, domain, city, country, stage, status, allPosts])
 
   const cityMatches = useMemo(() => {
     if (!city) return new Set<string>()
@@ -173,7 +179,13 @@ export function PostsPage() {
           </Card>
         ) : (
           posts.map((p) => (
-            <PostCard key={p.id} post={p} cityHighlight={city ? cityMatches.has(p.id) : false} currentUserId={u.id} />
+            <PostCard
+              key={p.id}
+              post={p}
+              cityHighlight={city ? cityMatches.has(p.id) : false}
+              currentUserId={u.id}
+              owner={users.find((x) => x.id === p.ownerUserId)}
+            />
           ))
         )}
       </div>
@@ -181,9 +193,9 @@ export function PostsPage() {
   )
 }
 
-function PostCard(props: { post: Post; cityHighlight: boolean; currentUserId: string }) {
+function PostCard(props: { post: Post; cityHighlight: boolean; currentUserId: string; owner: User | undefined }) {
   const p = props.post
-  const owner = db.get().users.find((u) => u.id === p.ownerUserId)
+  const owner = props.owner
   const sc = statusConfig(p.status)
 
   const stageLabelShort: Record<ProjectStage, string> = {

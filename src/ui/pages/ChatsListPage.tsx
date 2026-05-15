@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getCurrentUser } from '../../lib/auth'
-import { db } from '../../lib/db'
-import { getMessages } from '../../lib/chat'
+import { apiGetMeetingsForUser, apiGetAllUsers, apiGetChats, apiGetPost } from '../../lib/api'
+import type { ChatMessage, MeetingRequest, Post, User } from '../../lib/models'
 import { Card } from '../components/Ui'
 
 function timeAgo(iso: string): string {
@@ -15,28 +15,58 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
+type ChatEntry = {
+  meeting: MeetingRequest
+  other: User | undefined
+  post: Post | undefined
+  lastMsg: ChatMessage | undefined
+  messageCount: number
+}
+
 export function ChatsListPage() {
   const u = getCurrentUser()!
-  const data = db.get()
+  const [chats, setChats] = useState<ChatEntry[]>([])
 
-  const chats = useMemo(() => {
-    const acceptedMeetings = data.meetings.filter(
-      (m) => m.status === 'accepted' && (m.fromUserId === u.id || m.toUserId === u.id),
-    )
+  useEffect(() => {
+    async function load() {
+      const [meetings, users] = await Promise.all([
+        apiGetMeetingsForUser(u.id),
+        apiGetAllUsers(),
+      ])
+      const acceptedMeetings = meetings.filter(
+        (m) => m.status === 'accepted' && (m.fromUserId === u.id || m.toUserId === u.id),
+      )
 
-    return acceptedMeetings.map((meeting) => {
-      const otherUserId = meeting.fromUserId === u.id ? meeting.toUserId : meeting.fromUserId
-      const other = data.users.find((x) => x.id === otherUserId)
-      const post = data.posts.find((p) => p.id === meeting.postId)
-      const messages = getMessages(meeting.id)
-      const lastMsg = messages.at(-1)
-      return { meeting, other, post, lastMsg, messageCount: messages.length }
-    }).sort((a, b) => {
-      const aTime = a.lastMsg?.createdAt ?? a.meeting.updatedAt
-      const bTime = b.lastMsg?.createdAt ?? b.meeting.updatedAt
-      return aTime < bTime ? 1 : -1
-    })
-  }, [data, u.id])
+      const entries = await Promise.all(
+        acceptedMeetings.map(async (meeting) => {
+          const otherUserId = meeting.fromUserId === u.id ? meeting.toUserId : meeting.fromUserId
+          const other = users.find((x) => x.id === otherUserId)
+          const [messages, post] = await Promise.all([
+            apiGetChats(meeting.id).catch(() => [] as ChatMessage[]),
+            apiGetPost(meeting.postId).catch(() => undefined),
+          ])
+          const lastMsg = messages.at(-1)
+          return {
+            meeting,
+            other,
+            post: post ?? undefined,
+            lastMsg,
+            messageCount: messages.length,
+          }
+        }),
+      )
+
+      entries.sort((a, b) => {
+        const aTime = a.lastMsg?.createdAt ?? a.meeting.updatedAt
+        const bTime = b.lastMsg?.createdAt ?? b.meeting.updatedAt
+        return aTime < bTime ? 1 : -1
+      })
+
+      setChats(entries)
+    }
+
+    load().catch(console.error)
+  }, [u.id])
 
   return (
     <div className="mx-auto max-w-2xl">

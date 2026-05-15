@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getCurrentUser } from '../../lib/auth'
-import { db } from '../../lib/db'
+import { apiGetPost } from '../../lib/api'
 import type {
   CollaborationType,
   ConfidentialityLevel,
   ExpertiseRequired,
+  Post,
   PostStatus,
   ProjectStage,
 } from '../../lib/models'
@@ -25,10 +26,19 @@ export function PostEditorPage(props: { mode: 'create' | 'edit' }) {
   const u = getCurrentUser()!
   const nav = useNavigate()
   const { postId } = useParams()
-  const existing = useMemo(() => {
-    if (props.mode !== 'edit') return null
-    if (!postId) return null
-    return db.get().posts.find((p) => p.id === postId) ?? null
+
+  const [existing, setExisting] = useState<Post | null>(null)
+  const [loadingExisting, setLoadingExisting] = useState(props.mode === 'edit')
+
+  useEffect(() => {
+    if (props.mode !== 'edit' || !postId) {
+      setLoadingExisting(false)
+      return
+    }
+    apiGetPost(postId)
+      .then((p) => setExisting(p))
+      .catch(() => setExisting(null))
+      .finally(() => setLoadingExisting(false))
   }, [postId, props.mode])
 
   const defaultExpiry = useMemo(() => {
@@ -37,22 +47,49 @@ export function PostEditorPage(props: { mode: 'create' | 'edit' }) {
     return dateOnlyIso(d)
   }, [])
 
-  const [title, setTitle] = useState(existing?.title ?? '')
-  const [expertiseRequired, setExpertiseRequired] = useState<ExpertiseRequired>(existing?.expertiseRequired ?? (u.role === 'engineer' ? 'medical' : 'engineering'))
-  const [workingDomain, setWorkingDomain] = useState(existing?.workingDomain ?? '')
-  const [shortExplanation, setShortExplanation] = useState(existing?.shortExplanation ?? '')
-  const [desiredExpertise, setDesiredExpertise] = useState(existing?.desiredExpertise ?? '')
-  const [commitmentLevel, setCommitmentLevel] = useState(existing?.commitmentLevel ?? '')
-  const [highLevelIdea, setHighLevelIdea] = useState(existing?.highLevelIdea ?? '')
-  const [collaborationType, setCollaborationType] = useState<CollaborationType>(existing?.collaborationType ?? 'advisor')
-  const [confidentialityLevel, setConfidentialityLevel] = useState<ConfidentialityLevel>(existing?.confidentialityLevel ?? 'meeting_only')
-  const [expiryDate, setExpiryDate] = useState(existing?.expiryDate ?? defaultExpiry)
-  const [autoClose, setAutoClose] = useState(existing?.autoClose ?? true)
-  const [projectStage, setProjectStage] = useState<ProjectStage>(existing?.projectStage ?? 'idea')
-  const [country, setCountry] = useState(existing?.country ?? '')
-  const [city, setCity] = useState(existing?.city ?? '')
-  const [status, setStatus] = useState<PostStatus>(existing?.status ?? 'active')
+  const [title, setTitle] = useState('')
+  const [expertiseRequired, setExpertiseRequired] = useState<ExpertiseRequired>(u.role === 'engineer' ? 'medical' : 'engineering')
+  const [workingDomain, setWorkingDomain] = useState('')
+  const [shortExplanation, setShortExplanation] = useState('')
+  const [desiredExpertise, setDesiredExpertise] = useState('')
+  const [commitmentLevel, setCommitmentLevel] = useState('')
+  const [highLevelIdea, setHighLevelIdea] = useState('')
+  const [collaborationType, setCollaborationType] = useState<CollaborationType>('advisor')
+  const [confidentialityLevel, setConfidentialityLevel] = useState<ConfidentialityLevel>('meeting_only')
+  const [expiryDate, setExpiryDate] = useState(defaultExpiry)
+  const [autoClose, setAutoClose] = useState(true)
+  const [projectStage, setProjectStage] = useState<ProjectStage>('idea')
+  const [country, setCountry] = useState('')
+  const [city, setCity] = useState('')
+  const [status, setStatus] = useState<PostStatus>('active')
   const [error, setError] = useState<string | null>(null)
+  const [initialized, setInitialized] = useState(false)
+
+  // Populate fields once existing post is loaded
+  useEffect(() => {
+    if (existing && !initialized) {
+      setTitle(existing.title)
+      setExpertiseRequired(existing.expertiseRequired)
+      setWorkingDomain(existing.workingDomain)
+      setShortExplanation(existing.shortExplanation)
+      setDesiredExpertise(existing.desiredExpertise)
+      setCommitmentLevel(existing.commitmentLevel)
+      setHighLevelIdea(existing.highLevelIdea)
+      setCollaborationType(existing.collaborationType)
+      setConfidentialityLevel(existing.confidentialityLevel)
+      setExpiryDate(existing.expiryDate)
+      setAutoClose(existing.autoClose)
+      setProjectStage(existing.projectStage)
+      setCountry(existing.country)
+      setCity(existing.city)
+      setStatus(existing.status)
+      setInitialized(true)
+    }
+  }, [existing, initialized])
+
+  if (loadingExisting) {
+    return <Card className="p-8 text-center text-sm text-slate-500">Loading…</Card>
+  }
 
   if (props.mode === 'edit' && !existing) {
     return <Card className="p-8 text-center text-sm text-slate-500">Post not found.</Card>
@@ -90,7 +127,7 @@ export function PostEditorPage(props: { mode: 'create' | 'edit' }) {
       </div>
 
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault()
           setError(null)
           try {
@@ -102,7 +139,7 @@ export function PostEditorPage(props: { mode: 'create' | 'edit' }) {
             if (!country.trim() || !city.trim()) throw new Error('Country and city are required.')
 
             if (props.mode === 'create') {
-              const post = createPost({
+              const post = await createPost({
                 userId: u.id,
                 role: u.role === 'admin' ? 'engineer' : u.role,
                 title, expertiseRequired, workingDomain, shortExplanation,
@@ -111,7 +148,7 @@ export function PostEditorPage(props: { mode: 'create' | 'edit' }) {
               })
               nav(`/posts/${post.id}`)
             } else {
-              updatePost(existing!.id, u.id, u.role, {
+              await updatePost(existing!.id, u.id, u.role, {
                 title, expertiseRequired, workingDomain, shortExplanation,
                 desiredExpertise, commitmentLevel, highLevelIdea, collaborationType,
                 confidentialityLevel, expiryDate, autoClose, projectStage, country, city, status,

@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getCurrentUser } from '../../lib/auth'
-import { db } from '../../lib/db'
-import type { MeetingRequest, Post, PostStatus } from '../../lib/models'
+import { apiGetPost, apiGetMeetingsForPost, apiGetUser, apiCreateInterest } from '../../lib/api'
+import type { MeetingRequest, Post, PostStatus, User } from '../../lib/models'
 import { changePostStatus } from '../../lib/posts'
 import { createMeetingRequest, updateMeetingRequest } from '../../lib/meetings'
 import { audit } from '../../lib/audit'
@@ -17,18 +17,21 @@ function statusConfig(s: PostStatus): { label: string; tone: 'slate' | 'green' |
   return { label: 'Draft', tone: 'slate', dot: false }
 }
 
+const roleLabel = (role: string) => {
+  if (role === 'engineer') return 'Engineer'
+  if (role === 'healthcare') return 'Healthcare Professional'
+  return 'Admin'
+}
+
 export function PostDetailPage() {
   const u = getCurrentUser()!
   const nav = useNavigate()
   const { postId } = useParams()
 
-  const { post, owner, meetingsForPost } = useMemo(() => {
-    const data = db.get()
-    const post = data.posts.find((p) => p.id === postId) ?? null
-    const owner = post ? data.users.find((x) => x.id === post.ownerUserId) ?? null : null
-    const meetingsForPost = post ? data.meetings.filter((m) => m.postId === post.id) : []
-    return { post, owner, meetingsForPost }
-  }, [postId])
+  const [post, setPost] = useState<Post | null>(null)
+  const [owner, setOwner] = useState<User | null>(null)
+  const [meetingsForPost, setMeetingsForPost] = useState<MeetingRequest[]>([])
+  const [loading, setLoading] = useState(true)
 
   const [interestMsg, setInterestMsg] = useState('')
   const [ndaAccepted, setNdaAccepted] = useState(false)
@@ -36,6 +39,29 @@ export function PostDetailPage() {
   const [slot2, setSlot2] = useState('')
   const [slot3, setSlot3] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  const loadData = async () => {
+    if (!postId) return
+    const [fetchedPost, fetchedMeetings] = await Promise.all([
+      apiGetPost(postId),
+      apiGetMeetingsForPost(postId),
+    ])
+    setPost(fetchedPost)
+    setMeetingsForPost(fetchedMeetings)
+    if (fetchedPost) {
+      apiGetUser(fetchedPost.ownerUserId).then(setOwner).catch(() => {})
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    setLoading(true)
+    loadData().catch(() => setLoading(false))
+  }, [postId])
+
+  if (loading) {
+    return <Card className="p-8 text-center text-sm text-slate-500">Loading…</Card>
+  }
 
   if (!post || !owner) {
     return (
@@ -99,10 +125,10 @@ export function PostDetailPage() {
                 variant={post.status === 'closed' ? 'ghost' : 'primary'}
                 size="sm"
                 disabled={post.status === 'closed'}
-                onClick={() => {
+                onClick={async () => {
                   try {
-                    changePostStatus(post.id, u.id, u.role, 'closed')
-                    nav(0)
+                    await changePostStatus(post.id, u.id, u.role, 'closed')
+                    await loadData()
                   } catch (err) {
                     setError(err instanceof Error ? err.message : 'Failed.')
                   }
@@ -183,33 +209,42 @@ export function PostDetailPage() {
 
               <form
                 className="grid gap-4"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault()
                   setError(null)
                   try {
+                    const SLOT_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/
+                    const slots = [slot1, slot2, slot3].map((s) => s.trim()).filter(Boolean)
+                    if (slots.length === 0) {
+                      setError('Please provide at least one meeting time slot.')
+                      return
+                    }
+                    const badSlot = slots.find((s) => !SLOT_RE.test(s))
+                    if (badSlot) {
+                      setError(`Slot format must be YYYY-MM-DD HH:MM (e.g. 2026-05-10 14:00). Invalid value: "${badSlot}"`)
+                      return
+                    }
+
                     if (interestMsg.trim()) {
-                      db.update((d) => {
-                        d.interests.unshift({
-                          id: uid('int'),
-                          postId: post.id,
-                          fromUserId: u.id,
-                          toUserId: post.ownerUserId,
-                          message: interestMsg.trim(),
-                          createdAt: nowIso(),
-                        })
+                      await apiCreateInterest({
+                        id: uid('int'),
+                        postId: post.id,
+                        fromUserId: u.id,
+                        toUserId: post.ownerUserId,
+                        message: interestMsg.trim(),
+                        createdAt: nowIso(),
                       })
                       audit({ userId: u.id, role: u.role, actionType: 'security_event', result: 'success', details: 'interest_message_sent' })
                     }
 
-                    const slots = [slot1, slot2, slot3].map((s) => s.trim()).filter(Boolean)
-                    createMeetingRequest({
+                    await createMeetingRequest({
                       postId: post.id,
                       fromUserId: u.id,
                       toUserId: post.ownerUserId,
                       ndaAccepted,
                       proposedSlots: slots,
                     })
-                    nav(0)
+                    await loadData()
                   } catch (err) {
                     setError(err instanceof Error ? err.message : 'Failed to send request.')
                   }
@@ -257,7 +292,7 @@ export function PostDetailPage() {
             <SectionCard title="Meeting requests" description="Proposed time slots, accept/decline, or cancel.">
               <div className="grid gap-3">
                 {allMeetings.map((m) => (
-                  <MeetingCard key={m.id} meeting={m} post={post} isOwner={isOwner} onChanged={() => nav(0)} />
+                  <MeetingCard key={m.id} meeting={m} post={post} isOwner={isOwner} onChanged={loadData} />
                 ))}
               </div>
             </SectionCard>
@@ -273,7 +308,7 @@ export function PostDetailPage() {
               <Avatar name={owner.name} role={owner.role} size="md" />
               <div>
                 <div className="font-semibold text-slate-900">{owner.name}</div>
-                <div className="text-xs text-slate-500 capitalize mt-0.5">{db.roleLabel(owner.role)}</div>
+                <div className="text-xs text-slate-500 capitalize mt-0.5">{roleLabel(owner.role)}</div>
                 {owner.verified && (
                   <div className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
                     <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" aria-hidden="true">
@@ -350,7 +385,11 @@ function MeetingCard(props: { meeting: MeetingRequest; post: Post; isOwner: bool
   const u = getCurrentUser()!
   const m = props.meeting
   const otherUserId = m.fromUserId === u.id ? m.toUserId : m.fromUserId
-  const other = db.get().users.find((x) => x.id === otherUserId)
+  const [other, setOther] = useState<User | undefined>(undefined)
+
+  useEffect(() => {
+    apiGetUser(otherUserId).then(setOther).catch(() => {})
+  }, [otherUserId])
 
   const canAcceptDecline = props.isOwner && m.toUserId === u.id && m.status === 'pending'
   const canCancel = m.fromUserId === u.id && m.status === 'pending'
@@ -377,7 +416,7 @@ function MeetingCard(props: { meeting: MeetingRequest; post: Post; isOwner: bool
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Chat butonu — yalnızca accepted meeting'lerde */}
+          {/* Chat button — only for accepted meetings */}
           {m.status === 'accepted' && (
             <Link to={`/chat/${m.id}`}>
               <Button
@@ -389,7 +428,7 @@ function MeetingCard(props: { meeting: MeetingRequest; post: Post; isOwner: bool
                   </svg>
                 }
               >
-                Sohbet
+                Chat
               </Button>
             </Link>
           )}
@@ -397,10 +436,10 @@ function MeetingCard(props: { meeting: MeetingRequest; post: Post; isOwner: bool
             <>
               <Button
                 size="sm"
-                onClick={() => {
+                onClick={async () => {
                   const selected = m.proposedSlots[0]
-                  updateMeetingRequest({ meetingId: m.id, actingUserId: u.id, status: 'accepted', selectedSlot: selected })
-                  changePostStatus(props.post.id, u.id, u.role, 'meeting_scheduled')
+                  await updateMeetingRequest({ meetingId: m.id, actingUserId: u.id, status: 'accepted', selectedSlot: selected })
+                  await changePostStatus(props.post.id, u.id, u.role, 'meeting_scheduled')
                   props.onChanged()
                 }}
               >
@@ -409,8 +448,8 @@ function MeetingCard(props: { meeting: MeetingRequest; post: Post; isOwner: bool
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => {
-                  updateMeetingRequest({ meetingId: m.id, actingUserId: u.id, status: 'declined' })
+                onClick={async () => {
+                  await updateMeetingRequest({ meetingId: m.id, actingUserId: u.id, status: 'declined' })
                   props.onChanged()
                 }}
               >
@@ -422,8 +461,8 @@ function MeetingCard(props: { meeting: MeetingRequest; post: Post; isOwner: bool
             <Button
               size="sm"
               variant="danger"
-              onClick={() => {
-                updateMeetingRequest({ meetingId: m.id, actingUserId: u.id, status: 'cancelled' })
+              onClick={async () => {
+                await updateMeetingRequest({ meetingId: m.id, actingUserId: u.id, status: 'cancelled' })
                 props.onChanged()
               }}
             >

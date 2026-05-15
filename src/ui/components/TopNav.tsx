@@ -1,28 +1,38 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { db } from '../../lib/db'
 import { getCurrentUser, logout } from '../../lib/auth'
+import { apiGetMeetingsForUser } from '../../lib/api'
+import type { Role } from '../../lib/models'
 import { Avatar, Pill } from './Ui'
+
+function roleLabel(role: Role | undefined): string {
+  if (role === 'engineer') return 'Engineer'
+  if (role === 'healthcare') return 'Healthcare Professional'
+  if (role === 'admin') return 'Admin'
+  return ''
+}
 
 export function TopNav() {
   const nav = useNavigate()
   const loc = useLocation()
   const u = getCurrentUser()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [pendingMeetings, setPendingMeetings] = useState(0)
+  const [activeChats, setActiveChats] = useState(0)
 
-  const { pendingMeetings, activeChats } = (() => {
-    if (!u) return { pendingMeetings: 0, activeChats: 0 }
-    const meetings = db.get().meetings.filter(
-      (m) => m.fromUserId === u.id || m.toUserId === u.id,
-    )
-    return {
-      pendingMeetings: meetings.filter((m) => m.status === 'pending').length,
-      activeChats: meetings.filter((m) => m.status === 'accepted').length,
-    }
-  })()
+  useEffect(() => {
+    if (!u) return
+    apiGetMeetingsForUser(u.id)
+      .then((meetings) => {
+        const mine = meetings.filter((m) => m.fromUserId === u.id || m.toUserId === u.id)
+        setPendingMeetings(mine.filter((m) => m.status === 'pending').length)
+        setActiveChats(mine.filter((m) => m.status === 'accepted').length)
+      })
+      .catch(() => {})
+  }, [u?.id, loc.pathname])
 
   const roleTone = u?.role === 'engineer' ? 'blue' : u?.role === 'healthcare' ? 'teal' : 'violet'
-  const roleLabel = u ? db.roleLabel(u.role) : ''
+  const label = u ? roleLabel(u.role) : ''
 
   const navLinks = [
     { path: '/posts', label: 'Announcements' },
@@ -92,7 +102,7 @@ export function TopNav() {
                   <div className="min-w-0">
                     <div className="max-w-[120px] truncate text-xs font-semibold text-slate-900">{u.name}</div>
                     <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-slate-400">{roleTone && <Pill tone={roleTone} >{roleLabel}</Pill>}</span>
+                      <span className="text-[10px] text-slate-400">{roleTone && <Pill tone={roleTone}>{label}</Pill>}</span>
                     </div>
                   </div>
                 </div>
@@ -150,7 +160,7 @@ export function TopNav() {
                 <Avatar name={u.name} role={u.role} size="sm" />
                 <div>
                   <div className="text-sm font-semibold text-slate-900">{u.name}</div>
-                  <div className="text-xs text-slate-500">{roleLabel}</div>
+                  <div className="text-xs text-slate-500">{label}</div>
                 </div>
               </div>
             )}

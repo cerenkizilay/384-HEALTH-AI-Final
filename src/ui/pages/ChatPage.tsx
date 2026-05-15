@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getCurrentUser } from '../../lib/auth'
-import { db } from '../../lib/db'
+import { apiGetMeetingsForUser, apiGetUser, apiGetPost } from '../../lib/api'
 import { getMessages, sendMessage } from '../../lib/chat'
-import type { ChatMessage, MeetingRequest, User } from '../../lib/models'
+import type { ChatMessage, MeetingRequest, Post, User } from '../../lib/models'
 import { Card } from '../components/Ui'
 
 // ─── Time formatter ───────────────────────────────────────────────────────────
@@ -64,26 +64,40 @@ export function ChatPage() {
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [meeting, setMeeting] = useState<MeetingRequest | undefined>(undefined)
+  const [post, setPost] = useState<Post | undefined>(undefined)
+  const [other, setOther] = useState<User | undefined>(undefined)
+  const [metaLoaded, setMetaLoaded] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  const data = db.get()
-  const meeting: MeetingRequest | undefined = data.meetings.find((m) => m.id === meetingId)
-  const post = meeting ? data.posts.find((p) => p.id === meeting.postId) : undefined
-  const otherUserId = meeting
-    ? meeting.fromUserId === u.id
-      ? meeting.toUserId
-      : meeting.fromUserId
-    : undefined
-  const other: User | undefined = otherUserId ? data.users.find((x) => x.id === otherUserId) : undefined
+  // Load meeting metadata once
+  useEffect(() => {
+    if (!meetingId) return
+    apiGetMeetingsForUser(u.id)
+      .then((meetings) => {
+        const found = meetings.find((m) => m.id === meetingId)
+        setMeeting(found)
+        if (found) {
+          const otherUserId = found.fromUserId === u.id ? found.toUserId : found.fromUserId
+          apiGetUser(otherUserId).then(setOther).catch(() => {})
+          apiGetPost(found.postId).then((p) => { if (p) setPost(p) }).catch(() => {})
+        }
+      })
+      .catch(() => {})
+      .finally(() => setMetaLoaded(true))
+  }, [meetingId, u.id])
 
-  const isParty = meeting && (meeting.fromUserId === u.id || meeting.toUserId === u.id)
   const chatActive = meeting?.status === 'accepted'
+  const isParty = meeting && (meeting.fromUserId === u.id || meeting.toUserId === u.id)
 
   // Load messages + poll every 2s
   useEffect(() => {
     if (!meetingId || !chatActive) return
-    const load = () => setMessages(getMessages(meetingId))
+    const load = async () => {
+      const msgs = await getMessages(meetingId).catch(() => [] as ChatMessage[])
+      setMessages(msgs)
+    }
     load()
     const interval = window.setInterval(load, 2000)
     return () => window.clearInterval(interval)
@@ -95,6 +109,10 @@ export function ChatPage() {
   }, [messages])
 
   // ── Error states ──────────────────────────────────────────────────────────
+  if (!metaLoaded) {
+    return <Card className="p-8 text-center text-sm text-slate-500">Loading…</Card>
+  }
+
   if (!meeting || !isParty) {
     return (
       <Card className="p-8 text-center">
@@ -123,14 +141,15 @@ export function ChatPage() {
   }
 
   // ── Send message ──────────────────────────────────────────────────────────
-  function handleSend() {
+  async function handleSend() {
     if (!text.trim() || sending || !meetingId) return
     setSending(true)
     setError(null)
     try {
-      sendMessage({ meetingId, fromUserId: u.id, text })
+      await sendMessage({ meetingId, fromUserId: u.id, text })
       setText('')
-      setMessages(getMessages(meetingId))
+      const msgs = await getMessages(meetingId).catch(() => [] as ChatMessage[])
+      setMessages(msgs)
       inputRef.current?.focus()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send.')
