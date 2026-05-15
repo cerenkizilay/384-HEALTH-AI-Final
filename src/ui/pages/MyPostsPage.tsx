@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { getCurrentUser } from '../../lib/auth'
 import { apiGetUserPosts, apiGetMeetingsForUser, apiGetMeetingsForPost, apiGetUser } from '../../lib/api'
 import { changePostStatus } from '../../lib/posts'
@@ -16,7 +16,6 @@ function statusConfig(s: PostStatus): { label: string; tone: 'slate' | 'green' |
 
 export function MyPostsPage() {
   const u = getCurrentUser()!
-  const nav = useNavigate()
 
   const [myPosts, setMyPosts] = useState<Post[]>([])
   const [incomingMeetings, setIncomingMeetings] = useState<MeetingRequest[]>([])
